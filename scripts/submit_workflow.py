@@ -14,7 +14,7 @@ from pathlib import Path
 
 from _common import (HOST_ROLE_SUBMIT, LOGIN_EXECUTION_VARIABLE, WorkflowError, available_partitions,
                      effective_backend, host_role, host_role_source, load_project, login_execution_ack,
-                     task_is_implemented, validate_recorded_outputs, write_json)
+                     normalize_job_state, task_is_implemented, validate_recorded_outputs, write_json)
 from inspect_resources import inspect
 from validate_project import validate
 
@@ -78,7 +78,7 @@ def slurm_job_state(job_id: str) -> str:
     except (OSError, subprocess.SubprocessError) as exc:
         raise WorkflowError("cannot query squeue for job %s: %s" % (job_id, exc))
     if queued:
-        return queued[0].strip().upper().split("+", 1)[0]
+        return normalize_job_state(queued[0])
     try:
         history = subprocess.check_output(
             ["sacct", "-n", "-X", "-j", str(job_id), "--format=State", "--parsable2"],
@@ -86,7 +86,7 @@ def slurm_job_state(job_id: str) -> str:
         ).decode("utf-8").strip().splitlines()
     except (OSError, subprocess.SubprocessError) as exc:
         raise WorkflowError("cannot query sacct for job %s: %s" % (job_id, exc))
-    states = [line.split("|", 1)[0].strip().upper().split("+", 1)[0]
+    states = [normalize_job_state(line.split("|", 1)[0])
               for line in history if line.split("|", 1)[0].strip()]
     if not states:
         raise WorkflowError("Slurm job %s is absent from both squeue and sacct; refusing duplicate submission" % job_id)
@@ -94,7 +94,7 @@ def slurm_job_state(job_id: str) -> str:
 
 
 def submit(project: Path, run_id: str, dry_run: bool = False,
-           allow_login_execution: bool = False) -> dict:
+           allow_login_execution: bool = False, skip_full_validation: bool = False) -> dict:
     root = Path(project).resolve()
     run_dir, plan = load_plan(root, run_id)
     required_stages = {stage for item in plan.get("tasks", [])
@@ -125,6 +125,11 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
                 "allow-list and scheduler.partitions is empty. List the partitions this project may "
                 "use%s." % (run_id, " -- this cluster offers %s" % ", ".join(observed) if observed else ""))
         raise WorkflowError("Slurm backend requires a non-empty scheduler.partitions allow-list")
+    # Whether this run proceeds without a full validation on record. Resolved
+    # below, where matching evidence on disk is already looked for; a dry run
+    # validates nothing at all, so there the flag just reports what a real run
+    # with the same arguments would have done.
+    full_validation_skipped = bool(skip_full_validation) and dry_run
     if not dry_run:
         validation_path = root / ".workflow" / "validations" / (current["input_signature"] + ".full.json")
         full = None
@@ -136,11 +141,21 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
                     full = candidate
             except (OSError, ValueError):
                 pass
-        if full is None:
+        # The flag means "do not read the inputs again", not "ignore what was
+        # already read": evidence on disk that still matches this signature is
+        # used either way, so skipping never costs a run protection it already
+        # had. Nothing is written in its place, because a recorded full
+        # validation that no run performed would be worse than a missing one.
+        if full is None and skip_full_validation:
+            full_validation_skipped = True
+            print("WARNING: skipping the full input validation for run %s (--skip-full-validation); "
+                  "no full-validation evidence will exist for this run" % run_id, file=sys.stderr)
+        elif full is None:
             full = validate(root, mode="full", workers=max(1, int(scheduler.get("validation_workers", 4))),
                             required_stages=required_stages, selected_routes=selected_routes)
             write_json(validation_path, full)
-        if full["status"] != "valid" or full["input_signature"] != current["input_signature"]:
+        if full is not None and (full["status"] != "valid"
+                                 or full["input_signature"] != current["input_signature"]):
             raise WorkflowError("matching full input validation is required before production submission")
     if not dry_run:
         commands = cfg["analysis"].get("task_commands") or {}
@@ -213,6 +228,10 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
             "backend_effective": backend, "backend_source": backend_source,
             "login_execution": backend == "local" and role == HOST_ROLE_SUBMIT,
             "login_execution_ack": login_execution_ack(child_env) if backend == "local" else "",
+            # Recorded per task as well as on the plan: a reader holding one task
+            # record has to be able to see that its inputs were not re-read in
+            # full, or the absence of evidence looks like evidence of a check.
+            "full_validation_skipped": full_validation_skipped,
         }
         if dry_run:
             record["status"] = "dry_run"
@@ -270,9 +289,16 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
     plan["backend_source"] = backend_source
     if backend == "local" and role == HOST_ROLE_SUBMIT:
         plan["login_execution_ack"] = login_execution_ack(child_env)
+    # Written on every plan, not only when true, and derived from this
+    # submission rather than carried over from the loaded one: a run that first
+    # skipped validation and was then submitted with it must not keep reading as
+    # skipped. The value reflects what happened, so a run that reused evidence
+    # already on disk was validated and says so.
+    plan["full_validation_skipped"] = full_validation_skipped
     write_json(run_dir / "plan.json", plan)
     return {"status": plan["status"], "run_dir": str(run_dir), "jobs": job_ids,
-            "host_role": role, "backend_effective": backend, "backend_source": backend_source}
+            "host_role": role, "backend_effective": backend, "backend_source": backend_source,
+            "full_validation_skipped": full_validation_skipped}
 
 
 def main() -> int:
@@ -287,8 +313,18 @@ def main() -> int:
              "status file, and is never inherited by a submitted job or a later run. Use it for "
              "small debugging runs only; prefer running inside an allocation: salloc, or "
              "srun --pty bash.")
+    parser.add_argument(
+        "--skip-full-validation", action="store_true",
+        help="Submit without running a full input validation when the project has no matching "
+             "full-validation evidence on disk. A full validation reads every input, and on a "
+             "project with tens of thousands of ALLC files it is the slowest step of a "
+             "submission. The run is recorded as full_validation_skipped: true in plan.json "
+             "and in every task record, and no evidence file is written, so a later reader can "
+             "tell a skipped check from a passed one. Evidence already on disk and matching "
+             "this run's input signature is still used.")
     args = parser.parse_args()
-    result = submit(args.project, args.run_id, args.dry_run, args.allow_login_execution)
+    result = submit(args.project, args.run_id, args.dry_run, args.allow_login_execution,
+                    args.skip_full_validation)
     print(json.dumps(result, indent=2, sort_keys=True))
     return 0
 

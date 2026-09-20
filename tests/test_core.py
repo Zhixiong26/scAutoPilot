@@ -30,8 +30,9 @@ from _common import (LEGACY_RUN_STATE_END, LEGACY_RUN_STATE_START, RUN_KEY_SAFE_
                      STAGE_CONTEXT_START, STAGE_REPORTS, WorkflowError, available_partitions,
                      build_report_text, effective_backend, host_role, host_role_source,
                      load_project, load_samples, load_structured, login_execution_ack,
-                     refresh_run_log, refresh_stage_run_logs, slurm_allocation_id, stage_for_task,
-                     submit_host_execution_allowed,
+                     normalize_job_state, parse_walltime_seconds,
+                     refresh_run_log, refresh_stage_run_logs, sha256_file, slurm_allocation_id,
+                     stage_for_task, submit_host_execution_allowed, write_json,
                      report_run_key, task_is_implemented,
                      validate_recorded_outputs)  # noqa: E402
 import bootstrap_environments as environment_bootstrap  # noqa: E402
@@ -42,7 +43,9 @@ from inspect_resources import choose, enrich_nodes, inspect as inspect_resources
 from inspect_run import TERMINAL_BAD, inspect as inspect_run  # noqa: E402
 from plan_workflow import make_tasks  # noqa: E402
 from submit_workflow import slurm_job_state, submit  # noqa: E402
-from validate_project import allc_cell_id, validate, validate_allc_record  # noqa: E402
+import validate_project as validate_script  # noqa: E402
+from validate_project import (allc_cell_id, read_chunk_result, split_allc_chunks, validate,
+                              validate_allc_record, wait_for_jobs)  # noqa: E402
 
 
 # Names that are undefined in the source yet defined at run time: modules get the dunders
@@ -223,6 +226,294 @@ class SkillTests(unittest.TestCase):
             self.assertEqual(len(result["allc_validation"]), 2)
             annotation.write_text("cell_id\tcell_type\nS1_AAAC-1\tTypeA\nS1_AAAG-1\tUnassigned\n")
             self.assertFalse(validate(project)["routes"]["methscan_dmr"])
+
+    # --- ALLC full-validation fan-out ---------------------------------------
+    #
+    # A full ALLC validation reads every file end to end, so it is split into
+    # chunks and submitted. These tests run the real chunk worker with the argv
+    # the fan-out built and replace only `sbatch` and the queue poll: a fake
+    # that produced chunk results in-process would agree with a broken merge,
+    # which is the one thing the merge tests exist to catch.
+
+    @staticmethod
+    def slurm_scheduler(intake: dict) -> None:
+        intake["scheduler"] = {
+            "backend": "slurm", "partitions": ["cpu"],
+            "validation_parallel": 2, "validation_processes_per_task": 2,
+            "profiles": {"validation": {"target": {"cpus": 2, "memory": "8G", "time": "00:10:00"}}},
+        }
+
+    def allc_project(self, root: Path, count: int) -> Path:
+        project = self.generate(root, "paired", mutate=self.slurm_scheduler)
+        allc_root = root / "input" / "allc"
+        for index in range(count):
+            extra = allc_root / ("cell%03d.allc.tsv.gz" % index)
+            with gzip.open(str(extra), "wt") as handle:
+                handle.write("chr1\t%d\t+\tCGN\t1\t2\t1\n" % (index + 2))
+            Path(str(extra) + ".tbi").touch()
+        return project
+
+    def run_fanout(self, project: Path, skip_chunks=(), state: str = "COMPLETED",
+                   workers: int = 1, min_files_per_chunk: int = 1) -> tuple:
+        """Validate with the fan-out enabled, minus the scheduler.
+
+        Declares a compute host for the call, because the suite runs as a
+        standalone machine where submitting would be wrong. `skip_chunks` names
+        chunks whose job is reported complete without the worker ever running,
+        which is what a job killed after Slurm accepted it looks like.
+
+        The thresholds that decide whether and how finely to split are lowered
+        by default so a fixture of a few files still fans out; a caller that
+        wants the real per-chunk minimum passes it.
+        """
+        wrapper = str(project / "Scripts" / "Common" / "run_task.sbatch")
+        submitted = []
+        real_check_output = subprocess.check_output
+
+        def fake_check_output(command, *args, **kwargs):
+            if command[0] != "sbatch":
+                return real_check_output(command, *args, **kwargs)
+            submitted.append(list(command))
+            if int(command[command.index("--job-name") + 1].rsplit("_", 1)[1]) in skip_chunks:
+                return b"999\n"
+            subprocess.check_call(command[command.index(wrapper) + 1:], stdout=subprocess.DEVNULL)
+            return ("9%02d\n" % len(submitted)).encode()
+
+        with mock.patch.dict(os.environ, {"SCMO_HOST_ROLE": "compute"}), \
+                mock.patch.object(validate_script, "FANOUT_MIN_FILES", 1), \
+                mock.patch.object(validate_script, "FANOUT_MIN_FILES_PER_CHUNK", min_files_per_chunk), \
+                mock.patch("subprocess.check_output", fake_check_output), \
+                mock.patch.object(validate_script, "slurm_job_state", lambda job_id: state):
+            return validate(project, mode="full", workers=workers), submitted
+
+    def test_chunk_split_balances_bytes_and_is_deterministic(self):
+        entries = [{"path": "/allc/big.allc.tsv.gz", "size": 90}] + [
+            {"path": "/allc/small%d.allc.tsv.gz" % index, "size": 10} for index in range(5)]
+        by_path = {item["path"]: item["size"] for item in entries}
+        groups = split_allc_chunks(entries, 2)
+        self.assertEqual(groups, split_allc_chunks(entries, 2))
+        self.assertEqual(sorted(path for group in groups for path in group), sorted(by_path))
+        loads = [sum(by_path[path] for path in group) for group in groups]
+        # 90 of the 140 bytes are one file, so no split can do better than a
+        # heaviest group of 90. Splitting on file count would build a 110-byte
+        # group and make the whole fan-out wait on it.
+        self.assertEqual(max(loads), 90)
+
+    def test_fanout_merges_chunks_identically_to_the_serial_path(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.allc_project(Path(temp), 5)
+            serial = validate(project, mode="full", workers=1)
+            fanned, submitted = self.run_fanout(project)
+            self.assertGreaterEqual(len(submitted), 2)
+            self.assertEqual(fanned["status"], "valid")
+            self.assertEqual(fanned["input_signature"], serial["input_signature"])
+            self.assertEqual(fanned["allc_fanout"]["chunks"], len(submitted))
+            self.assertEqual(fanned["allc_fanout"]["parallel"], 2)
+            self.assertEqual(fanned["counts"]["allc_cells"], 6)
+            self.assertEqual(len(fanned["allc_validation"]), 6)
+            # The parallel result has to be the serial result, or a recorded
+            # validation stops telling anyone what was actually read.
+            self.assertEqual(json.dumps(fanned["allc_validation"], sort_keys=True),
+                             json.dumps(serial["allc_validation"], sort_keys=True))
+
+    def test_a_small_inventory_is_not_split_into_one_file_chunks(self):
+        """A chunk is a job, so a chunk holding one file spends longer starting up
+        than reading. Six files are one chunk, not six."""
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.allc_project(Path(temp), 5)
+            result, submitted = self.run_fanout(project, min_files_per_chunk=8)
+            self.assertEqual(len(submitted), 1)
+            self.assertEqual(result["allc_fanout"]["chunks"], 1)
+            self.assertEqual(result["status"], "valid")
+            self.assertEqual(result["counts"]["allc_cells"], 6)
+            self.assertEqual(len(result["allc_validation"]), 6)
+
+    def test_a_missing_chunk_fails_the_validation_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.allc_project(Path(temp), 5)
+            result, submitted = self.run_fanout(project, skip_chunks={0})
+            self.assertTrue(submitted)
+            # The job was accepted and reported complete, so only the merge can
+            # notice that its files were never read -- and it must.
+            self.assertEqual(result["status"], "invalid")
+            self.assertIn("chunk_000", " ".join(result["errors"]))
+            self.assertEqual(len(result["allc_validation"]), 5)
+
+    def test_a_chunk_that_accounts_for_fewer_files_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            manifest = root / "chunk_000.manifest.json"
+            out = root / "chunk_000.out.json"
+            write_json(manifest, {"schema_version": 1, "chunk": 0, "paths": ["/a", "/b"]})
+            write_json(out, {"schema_version": 1, "manifest_sha256": sha256_file(manifest),
+                             "paths": ["/a", "/b"],
+                             "outcomes": [{"path": "/a", "records_checked": 1, "mode": "full", "error": None}]})
+            records, errors = read_chunk_result(out, manifest, ["/a", "/b"])
+            self.assertEqual(records, [])
+            self.assertIn("chunk_000 accounted for 1 of its 2 files", " ".join(errors))
+            write_json(out, {"schema_version": 1, "manifest_sha256": "0" * 64,
+                             "paths": ["/a", "/b"],
+                             "outcomes": [{"path": "/a"}, {"path": "/b"}]})
+            records, errors = read_chunk_result(out, manifest, ["/a", "/b"])
+            self.assertEqual(records, [])
+            self.assertIn("different manifest", " ".join(errors))
+
+    def test_chunk_results_are_reused_while_their_manifest_still_matches(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.allc_project(Path(temp), 5)
+            first, submitted_first = self.run_fanout(project)
+            second, submitted_second = self.run_fanout(project)
+            self.assertTrue(submitted_first)
+            # A full read of a real project runs for hours, so a rerun after a
+            # failure elsewhere must not resubmit a chunk that already finished.
+            self.assertEqual(submitted_second, [])
+            self.assertEqual(second["allc_fanout"]["reused_chunks"],
+                             second["allc_fanout"]["chunks"])
+            self.assertEqual(json.dumps(second["allc_validation"], sort_keys=True),
+                             json.dumps(first["allc_validation"], sort_keys=True))
+
+    def test_fanout_never_submits_from_a_host_with_no_controller(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.allc_project(Path(temp), 5)
+            real_check_output = subprocess.check_output
+
+            def refuse(command, *args, **kwargs):
+                if command[0] == "sbatch":
+                    raise AssertionError("a standalone host has nothing to submit to")
+                return real_check_output(command, *args, **kwargs)
+
+            # No host-role override here: this is the suite's own standalone host,
+            # which is the case the fan-out has to leave alone. The project still
+            # declares the Slurm backend, so only the role check can be what stops
+            # it -- and the files still have to be read, in place.
+            with mock.patch.object(validate_script, "FANOUT_MIN_FILES", 1), \
+                    mock.patch("subprocess.check_output", refuse):
+                result = validate(project, mode="full", workers=2)
+            self.assertIsNone(result["allc_fanout"])
+            self.assertEqual(result["status"], "valid")
+            self.assertEqual(len(result["allc_validation"]), 6)
+
+    def test_skip_full_validation_records_the_skip_and_writes_no_evidence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.generate(Path(temp), "rna")
+            plan_command = [sys.executable, str(ROOT / "scripts/plan_workflow.py"),
+                            "--project", str(project), "--routes", "auto", "--run-id", "unit"]
+            subprocess.check_call(plan_command)
+            finished = subprocess.run(
+                [sys.executable, str(ROOT / "scripts/submit_workflow.py"),
+                 "--project", str(project), "--run-id", "unit", "--skip-full-validation"],
+                capture_output=True, text=True)
+            self.assertEqual(finished.returncode, 0, finished.stderr)
+            plan = json.loads((project / ".workflow/runs/unit/plan.json").read_text(encoding="utf-8"))
+            evidence = project / ".workflow/validations" / (plan["input_signature"] + ".full.json")
+            # A skip leaves no evidence: a file saying the inputs were read would
+            # outlive the run that did not read them, and would be reused by the
+            # next submission as if this one had checked them.
+            self.assertFalse(evidence.exists())
+            self.assertTrue(plan["full_validation_skipped"])
+            records = json.loads((project / ".workflow/runs/unit/submissions.json").read_text(encoding="utf-8"))
+            self.assertTrue(records)
+            self.assertTrue(all(item["full_validation_skipped"] for item in records))
+            self.assertIn("skipping the full input validation", finished.stderr)
+            # The skip is a fact about one submission, not a property of the
+            # project: the next run without the flag validates and records it.
+            subprocess.check_call(plan_command[:-1] + ["later"])
+            subprocess.check_call([sys.executable, str(ROOT / "scripts/submit_workflow.py"),
+                                   "--project", str(project), "--run-id", "later"])
+            later = json.loads((project / ".workflow/runs/later/plan.json").read_text(encoding="utf-8"))
+            self.assertFalse(later["full_validation_skipped"])
+            self.assertTrue(evidence.is_file())
+            self.assertEqual(json.loads(evidence.read_text(encoding="utf-8"))["status"], "valid")
+
+    def test_inspection_reports_what_the_full_validation_actually_read(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.generate(Path(temp), "rna")
+            subprocess.check_call([sys.executable, str(ROOT / "scripts/plan_workflow.py"),
+                                   "--project", str(project), "--routes", "auto", "--run-id", "planned"])
+            summary = inspect_run(project, "planned")
+            self.assertEqual(summary["full_validation"]["evidence"], "absent")
+            self.assertFalse(summary["full_validation"]["skipped"])
+            subprocess.check_call([sys.executable, str(ROOT / "scripts/plan_workflow.py"),
+                                   "--project", str(project), "--routes", "auto", "--run-id", "unit"])
+            subprocess.check_call([sys.executable, str(ROOT / "scripts/submit_workflow.py"),
+                                   "--project", str(project), "--run-id", "unit"])
+            summary = inspect_run(project, "unit")
+            # An rna-only project reads no ALLC file, so a valid full validation
+            # here covers nothing methylation-related. That has to be visible, or
+            # "the inputs were validated" reads the same on any project.
+            self.assertEqual(summary["full_validation"]["evidence"], "valid")
+            self.assertEqual(summary["full_validation"]["allc_cells"], 0)
+            self.assertFalse(summary["full_validation"]["skipped"])
+
+    def test_waiting_for_jobs_does_not_return_on_a_queued_state(self):
+        # A job observed as PENDING has been observed, not finished. Returning
+        # there merges a fan-out whose chunks are still in the queue, so it is
+        # the difference between a validation and a race.
+        polls = []
+
+        def observed(job_id):
+            polls.append(job_id)
+            return ["PENDING", "RUNNING", "COMPLETED"][len(polls) - 1]
+
+        with mock.patch.object(validate_script, "slurm_job_state", observed), \
+                mock.patch.object(validate_script, "JOB_POLL_SECONDS", 0):
+            states = wait_for_jobs(["1"], timeout=60)
+        self.assertEqual(states, {"1": "COMPLETED"})
+        # Three reads: two queue states that must not end the wait, and the one
+        # that does. Reading a state is not the same as the job having finished.
+        self.assertEqual(len(polls), 3)
+
+    def test_a_cancelled_job_ends_the_wait(self):
+        # The literal strings the cluster returns: sacct decorates a cancelled
+        # state with the account that cancelled it, and a queue column truncates
+        # with a trailing +. Left undecorated, neither equals CANCELLED, so a
+        # killed job reads as one still running and the wait runs to its
+        # deadline for a worker that will never write anything.
+        self.assertEqual(normalize_job_state("CANCELLED by 1111"), "CANCELLED")
+        self.assertEqual(normalize_job_state("CANCELLED+"), "CANCELLED")
+        self.assertEqual(normalize_job_state("completed"), "COMPLETED")
+
+        def fake_check_output(command, *args, **kwargs):
+            # A job that was cancelled has left the queue; only accounting has it.
+            if command[0] == "squeue":
+                return b""
+            return b"CANCELLED by 1111\n"
+
+        with mock.patch("subprocess.check_output", fake_check_output):
+            self.assertEqual(validate_script.slurm_job_state("1111"), "CANCELLED")
+            with mock.patch.object(validate_script, "JOB_POLL_SECONDS", 0):
+                self.assertEqual(wait_for_jobs(["1111"], timeout=0), {"1111": "CANCELLED"})
+
+    def test_waiting_for_jobs_gives_up_on_a_job_no_queue_knows(self):
+        with mock.patch.object(validate_script, "slurm_job_state", lambda job_id: ""), \
+                mock.patch.object(validate_script, "LOST_JOB_GRACE_SECONDS", 0), \
+                mock.patch.object(validate_script, "JOB_POLL_SECONDS", 0):
+            self.assertEqual(wait_for_jobs(["1"], timeout=60), {"1": "MISSING"})
+
+    def test_waiting_for_jobs_reports_a_deadline_as_a_timeout(self):
+        with mock.patch.object(validate_script, "slurm_job_state", lambda job_id: "RUNNING"), \
+                mock.patch.object(validate_script, "JOB_POLL_SECONDS", 0):
+            self.assertEqual(wait_for_jobs(["1"], timeout=0), {"1": "TIMEOUT"})
+
+    def test_validation_reads_inputs_in_processes_not_threads(self):
+        for relative in ("scripts/validate_project.py",
+                         "assets/project-template/Scripts/Common/validate_allc_chunk.py"):
+            source = (ROOT / relative).read_text(encoding="utf-8")
+            # The per-line check holds the GIL for its whole loop: a thread pool
+            # measured 2.3x slower than reading the files one at a time, so this
+            # is a correctness-of-design assertion, not a style preference.
+            self.assertNotIn("ThreadPoolExecutor", source)
+            self.assertIn("ProcessPoolExecutor", source)
+
+    def test_job_time_limits_parse_the_way_slurm_reads_them(self):
+        self.assertEqual(parse_walltime_seconds("30"), 30 * 60)
+        self.assertEqual(parse_walltime_seconds("10:30"), 10 * 60 + 30)
+        self.assertEqual(parse_walltime_seconds("04:00:00"), 4 * 3600)
+        self.assertEqual(parse_walltime_seconds("1-00:00:00"), 86400)
+        self.assertEqual(parse_walltime_seconds("2-03:04:05"), 2 * 86400 + 3 * 3600 + 4 * 60 + 5)
+        for bad in ("", "4h", "1:2:3:4", "tomorrow"):
+            with self.assertRaises(WorkflowError):
+                parse_walltime_seconds(bad)
 
     def test_bad_checksum_and_duplicate_sample(self):
         with tempfile.TemporaryDirectory() as temp:

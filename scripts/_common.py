@@ -42,6 +42,20 @@ TERMINAL_BAD_STATES = {
     "BOOT_FAIL", "DEADLINE", "REVOKED", "SPECIAL_EXIT", "failed",
 }
 
+
+def normalize_job_state(raw: Any) -> str:
+    """A scheduler state reduced to the state name alone.
+
+    Slurm decorates the states it reports: accounting writes `CANCELLED by 1111`
+    and a queue column is truncated with a trailing `+`. Compared against
+    `TERMINAL_BAD_STATES` untouched, neither equals `CANCELLED`, so a job that
+    was killed reads as one that is still running and the caller waits for a
+    worker that will never write anything. Every state this workflow reads goes
+    through here so there is one answer to "is this job finished".
+    """
+    return str(raw).strip().split(" ")[0].split("+", 1)[0].upper()
+
+
 # The root Report.md run log. One region holds every per-run record; inside it
 # each run gets its own marker pair so a re-inspection updates that run in place
 # instead of appending a duplicate. Only the region is tool-owned: the heading
@@ -666,6 +680,37 @@ def parse_memory_mb(value: Any) -> int:
     unit = match.group(2)
     factor = {"": 1, "K": 1 / 1024, "M": 1, "G": 1024, "T": 1024 * 1024}[unit]
     return int(number * factor)
+
+
+def parse_walltime_seconds(value: Any) -> int:
+    """A job time limit in seconds.
+
+    Reads the forms `sbatch --time` accepts the way Slurm reads them, in which a
+    value without a days prefix counts up from the right -- `30` is minutes and
+    `10:30` is minutes:seconds, not hours:minutes. Guessing differently would
+    silently shorten a limit that was copied out of a batch script. Needed
+    because the limit is a resource the caller has to reason about and not only
+    pass through: the ALLC fan-out sizes its overall deadline from the per-chunk
+    limit it submits.
+    """
+    text = str(value).strip()
+    days = 0
+    if "-" in text:
+        day_part, _, text = text.partition("-")
+        if not day_part.isdigit():
+            raise WorkflowError("invalid time limit: %s" % value)
+        days = int(day_part)
+    fields = text.split(":")
+    if not 1 <= len(fields) <= 3 or not all(field.isdigit() for field in fields):
+        raise WorkflowError("invalid time limit: %s" % value)
+    numbers = [int(field) for field in fields]
+    if len(numbers) == 3:
+        hours, minutes, seconds = numbers
+    elif len(numbers) == 2:
+        hours, minutes, seconds = (numbers[0], numbers[1], 0) if days else (0, numbers[0], numbers[1])
+    else:
+        hours, minutes, seconds = (numbers[0], 0, 0) if days else (0, numbers[0], 0)
+    return days * 86400 + hours * 3600 + minutes * 60 + seconds
 
 
 def command_exists(command: str) -> bool:

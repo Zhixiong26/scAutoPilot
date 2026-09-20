@@ -99,6 +99,15 @@ DEFAULT_PROFILES = {
     "trainer": {"floor": {"cpus": 8, "memory": "32G"}, "target": {"cpus": 32, "memory": "90G", "time": "7-00:00:00"}, "ceiling": {"cpus": 64, "memory": "256G"}},
     "plot": {"floor": {"cpus": 2, "memory": "8G"}, "target": {"cpus": 8, "memory": "32G", "time": "1-00:00:00"}, "ceiling": {"cpus": 16, "memory": "64G"}},
     "summary": {"floor": {"cpus": 1, "memory": "2G"}, "target": {"cpus": 2, "memory": "8G", "time": "02:00:00"}, "ceiling": {"cpus": 4, "memory": "16G"}},
+    # One validation chunk reads whole ALLC files line by line, so its cost is
+    # input bytes rather than anything the stage can shorten; the time limit is
+    # sized for a large share of a terabyte, not for a typical stage. The cpus
+    # are one process per core, each holding a single decompressed line -- 2 GB
+    # per process is generous for that, and the ceiling is what
+    # `scheduler.validation_processes_per_task` should be raised *with*, not
+    # above. This profile is submitted by validate_project.py itself, never by a
+    # planned task, so it is absent from the route/stage profile mapping.
+    "validation": {"floor": {"cpus": 2, "memory": "4G"}, "target": {"cpus": 4, "memory": "8G", "time": "04:00:00"}, "ceiling": {"cpus": 16, "memory": "32G"}},
 }
 
 
@@ -749,6 +758,12 @@ def main() -> int:
         "schema_version": 2, "backend": default_backend, "account": None,
         "partitions": inferred_partitions, "allow_nodes": [], "exclude_nodes": [],
         "memory_headroom_mb": 4096, "max_parallel": 2, "validation_workers": 4,
+        # A full ALLC validation reads every file end to end in plain Python, so
+        # it is distributed across chunk tasks rather than run in place. Total
+        # concurrency is the product of these two, and both are written out
+        # instead of one being derived, so the number that matters is visible in
+        # one place. Raise them by the same product.
+        "validation_parallel": 8, "validation_processes_per_task": 4,
         "limited_profiles": ["methscan_branch", "dmr", "feature_builder", "trainer"],
         "local": {"max_threads": 16, "max_memory": "64G"}, "profiles": DEFAULT_PROFILES,
     }, intake.get("scheduler") or {})

@@ -11,8 +11,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from _common import (
-    HOST_ROLE_STANDALONE, TERMINAL_BAD_STATES, WorkflowError, refresh_run_log, refresh_stage_run_logs,
-    signature, validate_recorded_outputs, write_json,
+    HOST_ROLE_STANDALONE, TERMINAL_BAD_STATES, WorkflowError, normalize_job_state, refresh_run_log,
+    refresh_stage_run_logs, signature, validate_recorded_outputs, write_json,
 )
 
 
@@ -38,7 +38,7 @@ def sacct_usage(job_ids: list[str]) -> dict[str, dict]:
         fields = line.split("|")
         if len(fields) >= 2 and "." not in fields[0]:
             result[fields[0]] = {
-                "state": fields[1].split()[0].split("+")[0],
+                "state": normalize_job_state(fields[1]),
                 "elapsed": fields[2] if len(fields) > 2 else "",
                 "allocated_cpus": fields[3] if len(fields) > 3 else "",
                 "requested_memory": fields[4] if len(fields) > 4 else "",
@@ -47,6 +47,47 @@ def sacct_usage(job_ids: list[str]) -> dict[str, dict]:
                 "exit_code": fields[7] if len(fields) > 7 else "",
             }
     return result
+
+
+def full_validation_record(project: Path, plan: dict) -> dict:
+    """What full-validation evidence exists for this run's input signature.
+
+    A run summary that only says the inputs were validated cannot be trusted on
+    a project whose ALLC files are checked only when a methylation route is
+    selected: the same verdict covers reading nothing and reading a terabyte.
+    The ALLC counts are what separate the two, so they are reported next to the
+    verdict instead of being left inside the evidence file to be found.
+
+    `allc_cells` keeps the name the evidence file uses for it -- the number of
+    ALLC files the selected routes included. `allc_files` is what was actually
+    read, so a validation that included files and read none is visible as such
+    rather than as two equal numbers.
+    """
+    signature_value = str(plan.get("input_signature") or "")
+    record = {"signature": signature_value, "evidence": "absent", "allc_cells": None,
+              "allc_files": None, "allc_fanout": None,
+              "skipped": bool(plan.get("full_validation_skipped"))}
+    if not signature_value:
+        return record
+    path = Path(project).resolve() / ".workflow" / "validations" / (signature_value + ".full.json")
+    if not path.is_file():
+        return record
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        record["evidence"] = "unreadable"
+        return record
+    if str(payload.get("input_signature") or "") != signature_value:
+        record["evidence"] = "signature_mismatch"
+        return record
+    if payload.get("validation_mode") != "full":
+        record["evidence"] = "not_full"
+        return record
+    record["evidence"] = payload.get("status") or "unknown"
+    record["allc_cells"] = int((payload.get("counts") or {}).get("allc_cells") or 0)
+    record["allc_files"] = len(payload.get("allc_validation") or [])
+    record["allc_fanout"] = payload.get("allc_fanout")
+    return record
 
 
 def inspect(project: Path, run_id: str) -> dict:
@@ -140,15 +181,27 @@ def inspect(project: Path, run_id: str) -> dict:
     else:
         status = "planned"
     login_tasks = [row["task"] for row in task_rows if row["executed_on_login_node"]]
+    full_validation = full_validation_record(Path(project), plan)
     result = {
         "schema_version": 1, "run_id": run_id, "status": status,
         "checked_at": datetime.now(timezone.utc).isoformat(), "tasks": task_rows,
         "input_signature": plan.get("input_signature"),
         "login_execution_tasks": login_tasks,
+        "full_validation": full_validation,
     }
     if login_tasks:
         print("WARNING: %d task(s) of run %s executed on the host that submitted them, not on a "
               "compute node: %s" % (len(login_tasks), run_id, ", ".join(login_tasks)), file=sys.stderr)
+    if full_validation["skipped"]:
+        print("WARNING: run %s was submitted with --skip-full-validation and has no full-validation "
+              "evidence for its inputs" % run_id, file=sys.stderr)
+    elif full_validation["evidence"] != "valid":
+        print("WARNING: run %s has no matching full-validation evidence for its inputs (state: %s); "
+              "run `python tools/validate_project.py --project . --mode full` to produce it"
+              % (run_id, full_validation["evidence"]), file=sys.stderr)
+    elif not full_validation["allc_cells"]:
+        print("INFO: run %s was fully validated, but this project's selected routes read no ALLC "
+              "files, so no methylation input was checked" % run_id, file=sys.stderr)
     write_json(run_dir / "run_summary.json", result)
     if status == "complete":
         (run_dir / "workflow.COMPLETE").touch()
