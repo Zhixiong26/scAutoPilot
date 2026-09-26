@@ -49,7 +49,11 @@ def discover_allcs(sample_rows):
     rows = []
     seen = set()
     for sample in sample_rows:
-        source = Path(sample["allc_root"]).resolve()
+        # Keep the project-visible path. Some archives expose the ALLC and its
+        # index through paired symlinks whose resolved targets have different
+        # basenames; resolving the data link here breaks the otherwise valid
+        # ``<allc>.tbi`` adjacency contract used by ALLCools.
+        source = Path(sample["allc_root"]).absolute()
         pattern = (sample.get("allc_glob") or "**/*.allc.tsv.gz").strip()
         paths = sorted(path for path in source.glob(pattern) if path.is_file())
         if not paths:
@@ -63,8 +67,8 @@ def discover_allcs(sample_rows):
             if not index.is_file():
                 raise FileNotFoundError("Missing ALLC index: %s" % index)
             rows.append({"sample_id": sample["sample_id"], "barcode": barcode,
-                         "cell_id": cell_id, "source_path": str(path.resolve()),
-                         "source_index": str(index.resolve())})
+                         "cell_id": cell_id, "source_path": str(path.absolute()),
+                         "source_index": str(index.absolute())})
     return rows
 
 

@@ -66,7 +66,14 @@ DEFAULT_ANALYSIS = {
         "leiden": {"resolution": 0.8},
         "candidate": {"min_score_margin": 0.20, "top_markers_per_cluster": 5},
         "seed": 0,
-        "sample_palette": ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#56B4E9", "#D55E00"],
+        # Tab20 provides a safe generated default for moderately sized cohorts.
+        # Preflight rejects a shorter custom palette before a job is submitted.
+        "sample_palette": [
+            "#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c",
+            "#98df8a", "#d62728", "#ff9896", "#9467bd", "#c5b0d5",
+            "#8c564b", "#c49c94", "#e377c2", "#f7b6d2", "#7f7f7f",
+            "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5",
+        ],
     },
     "methscan": {
         "min_sites": 300000, "min_meth_percent": 50, "max_meth_percent": 100,

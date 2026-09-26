@@ -29,7 +29,8 @@ PROFILES: Dict[str, Dict[str, Any]] = {
         "executable": "bin/python",
         "check": [
             "bin/python", "-c",
-            "import ALLCools,anndata,harmonypy,leidenalg,scanpy,scrublet,yaml; "
+            "import ALLCools,anndata,dask,harmonypy,imblearn,leidenalg,openTSNE,scanpy,scrublet,yaml,zarr; "
+            "from ALLCools.clustering import ConsensusClustering,binarize_matrix,lsi,significant_pc_test,tsne; "
             "print('analysis_core', scanpy.__version__, anndata.__version__)",
         ],
     },

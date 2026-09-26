@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
 import warnings
@@ -23,6 +24,61 @@ from ALLCools.clustering import (
     tsne,
 )
 from ALLCools.mcds import MCDS
+from allcools_compat import leiden_runner_cells_by_runs
+
+
+# ALLCools 1.1.1 transposes the worker DataFrame constructor. Patch the module
+# global consumed by ConsensusClustering while keeping site-packages immutable.
+_consensus_module = importlib.import_module("ALLCools.clustering.ConsensusClustering")
+_consensus_module._leiden_runner = leiden_runner_cells_by_runs
+
+
+def normalize_feature_coordinate_dims(mcds, var_dim: str):
+    """Attach ALLCools region coordinates to the feature dimension.
+
+    ALLCools 1.1.1 can write ``*_chrom``, ``*_start``, and ``*_end`` as
+    independent coordinate dimensions with the same length as ``var_dim``.
+    Its own ``get_feature_bed`` implementation expects those arrays to be
+    indexed by ``var_dim`` and otherwise fails when chromosome labels repeat.
+    Normalize only this known shape-compatible representation and reject any
+    ambiguous size mismatch.
+    """
+    feature_count = int(mcds.get_index(var_dim).size)
+    normalized = []
+    for suffix in ("chrom", "bin_start", "start", "bin_end", "end"):
+        name = f"{var_dim}_{suffix}"
+        coord = mcds.get(name)
+        if coord is None or coord.dims == (var_dim,):
+            continue
+        if coord.ndim != 1 or int(coord.size) != feature_count:
+            raise ValueError(
+                f"Cannot align coordinate {name}: dims={coord.dims}, "
+                f"size={coord.size}, expected={feature_count}"
+            )
+        values = np.asarray(coord.values)
+        mcds = mcds.drop_vars(name).assign_coords({name: (var_dim, values)})
+        normalized.append(name)
+    if normalized:
+        print(
+            "Normalized MCDS feature-coordinate dimensions: " + ", ".join(normalized),
+            flush=True,
+        )
+    return mcds
+
+
+def ensure_sparse_compatible_score_dtype(mcds, var_dim: str, mc_type: str, quant_type: str):
+    """Promote float16 scores before ALLCools constructs SciPy CSR chunks."""
+    score_name = f"{var_dim}_da_{mc_type}-{quant_type}"
+    score = mcds.get(score_name)
+    if score is None:
+        raise KeyError(f"MCDS score variable not found: {score_name}")
+    if score.dtype == np.dtype("float16"):
+        mcds[score_name] = score.astype(np.float32)
+        print(
+            f"Promoted {score_name} from float16 to float32 for SciPy sparse compatibility",
+            flush=True,
+        )
+    return mcds
 
 
 def parse_args() -> argparse.Namespace:
@@ -60,6 +116,7 @@ def main() -> None:
         )
     warnings.filterwarnings("ignore", category=FutureWarning)
     mcds = MCDS.open(str(args.mcds), var_dim="chrom5k")
+    mcds = normalize_feature_coordinate_dims(mcds, "chrom5k")
     bins_before_blacklist = int(mcds.get_index("chrom5k").size)
     mcds = mcds.remove_black_list_region(
         black_list_path=str(args.blacklist), f=args.blacklist_fraction,
@@ -70,7 +127,11 @@ def main() -> None:
         f"{bins_before_blacklist:,} 5-kb bins (overlap >= {args.blacklist_fraction:g})",
         flush=True,
     )
-    adata = mcds.get_score_adata(mc_type=os.environ["SCMO_MC_CONTEXT"], quant_type="hypo-score")
+    mc_context = os.environ["SCMO_MC_CONTEXT"]
+    mcds = ensure_sparse_compatible_score_dtype(
+        mcds, "chrom5k", mc_context, "hypo-score"
+    )
+    adata = mcds.get_score_adata(mc_type=mc_context, quant_type="hypo-score")
     initial_shape = [int(adata.n_obs), int(adata.n_vars)]
     print(f"Initial matrix: {adata.n_obs:,} cells x {adata.n_vars:,} bins", flush=True)
 

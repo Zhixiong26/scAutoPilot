@@ -158,7 +158,10 @@ def main() -> None:
             index = Path(manifest.at[name, "source_index"])
             if not path.is_file() or path.stat().st_size == 0 or not index.is_file() or index.stat().st_size == 0:
                 raise FileNotFoundError(f"Invalid original ALLC/index for {name}: {path}")
-            selected.append((name, path.resolve()))
+            # The manifest deliberately preserves a project-visible ALLC path
+            # with its adjacent .tbi symlink. Resolving only the ALLC can point
+            # at an archive target whose index has a different basename.
+            selected.append((name, path.absolute()))
     else:
         if not files:
             raise FileNotFoundError(f"No *{COV_SUFFIX} files in {args.cov_dir}")

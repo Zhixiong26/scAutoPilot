@@ -93,6 +93,22 @@ def slurm_job_state(job_id: str) -> str:
     return states[0]
 
 
+def slurm_dependency_argument(scientific_dependencies, throttle_dependencies) -> str:
+    """Build dependencies without turning concurrency limits into DAG edges.
+
+    Scientific parents use ``afterok``. A throttle slot only waits for the
+    previous resource-heavy job to leave the queue, regardless of its outcome;
+    using afterok for it lets an unrelated failure poison every later task that
+    happened to reuse that slot.
+    """
+    clauses = []
+    if scientific_dependencies:
+        clauses.append("afterok:%s" % ":".join(scientific_dependencies))
+    if throttle_dependencies:
+        clauses.append("afterany:%s" % ":".join(throttle_dependencies))
+    return ",".join(clauses)
+
+
 def submit(project: Path, run_id: str, dry_run: bool = False,
            allow_login_execution: bool = False, skip_full_validation: bool = False) -> dict:
     root = Path(project).resolve()
@@ -211,7 +227,6 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
             slot = throttle_index % max_parallel
             prior = throttle_slots[slot]
             if prior and prior not in dependencies:
-                dependencies.append(prior)
                 throttle_dependencies.append(prior)
             throttle_index += 1
         record = {
@@ -266,8 +281,9 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
             account = scheduler.get("account")
             if account:
                 sbatch.extend(["--account", str(account)])
-            if dependencies:
-                sbatch.extend(["--dependency", "afterok:%s" % ":".join(dependencies)])
+            dependency_argument = slurm_dependency_argument(dependencies, throttle_dependencies)
+            if dependency_argument:
+                sbatch.extend(["--dependency", dependency_argument])
             if recommendation.get("pin_node"):
                 sbatch.extend(["--nodelist", recommendation["reference_node"]])
             sbatch.extend([str(wrapper)] + command)

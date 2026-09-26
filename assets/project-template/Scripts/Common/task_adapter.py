@@ -178,6 +178,15 @@ def main() -> int:
         "SCMO_EPOCHS": str(mvi.get("epochs", 500)),
         "SCMO_BATCH_SIZE": str(mvi.get("batch_size", 32)), "SCMO_SEED": str(mvi.get("seed", 0)),
         "SCMO_VALIDATION_FRACTION": str(mvi.get("validation_fraction", 0.1)),
+        # Training tasks call the shared scripts directly rather than sourcing
+        # a route shell config, so every required training/plotting variable
+        # must be present in this common task environment.
+        "SCMO_BATCH_KEY": "sample_id", "SCMO_CELLTYPE_KEY": "cell_type",
+        "SCMO_SUPERVISED_TARGET_KEY": "cell_type",
+        "SCMO_SUPERVISED_TARGET_WEIGHTS": " ".join(
+            map(str, mvi.get("supervised_umap_weights", [0.2, 0.5, 0.7, 0.9]))
+        ),
+        "SCMO_SUPERVISED_NEIGHBORS": "15", "SCMO_SUPERVISED_MIN_DIST": "0.5",
         "SCMO_THREADS": os.environ.get("SLURM_CPUS_PER_TASK", os.environ.get("SCMO_CPUS", "1")),
         "MPLBACKEND": "Agg", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
         "OPENBLAS_NUM_THREADS": "1", "NUMEXPR_NUM_THREADS": "1",

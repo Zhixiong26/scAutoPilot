@@ -1,0 +1,623 @@
+# 参数—产物依赖注册表（plan.md §4.1）
+#
+# 每个条目记录参数到产物的直接依赖，以及该依赖成立的依据（读取点）。失效范围
+# 由 `affected_artifacts(p) = transitive_closure(direct_artifacts(p))` 推出，
+# 不在这里手写闭包——手写的闭包就是 §4 禁止的第二套失效规则。
+#
+# evidence 路径是**项目根相对**路径：本文件随模板复制到生成项目的 config/ 下，因此
+# `Scripts/Scanpy/...` 在生成项目里直接可解析。在 skill 仓库内对应
+# `assets/project-template/Scripts/...`，同一份文件、同一套代码。
+#
+# 四种状态，含义不同：
+#   parameters 且 searchable: true    已通过行为测试，可与 packaged policy 求交集
+#   parameters 且 searchable: false   已追踪但当前关闭（包括等待行为测试的轴）
+#   frozen                            计划声明可搜索、代码中不存在（实现缺口）
+#   未出现                            未知，执行前拒绝
+#
+# 产物命名约定：同一条链上失效范围完全相同的图件合并为一个 ID（figures_*），
+# 避免逐图登记带来的维护面；合并边界与审计给出的上游集合一致。
+#
+# 审计基准：模板 0.8.0，2026-09-25。三条路线分别审计，证据为文件:行号。
+# 当前所有条目保持 searchable:false；M2 行为测试逐轴通过后再单独开放。
+
+schema_version: 1
+
+tools:
+  template: "0.8.0"
+  scvi-tools: "1.5.0.post1"
+
+artifacts:
+
+  # --- Scanpy 路线 ---------------------------------------------------------
+  # 现状：整条路线是单个 `scanpy` 任务，执行器每次整体执行 notebook，没有阶段级
+  # 缓存（run_scanpy_notebook.py 内无 cache/invalidate 逻辑）。下面的 DAG 是
+  # 语义依赖；"可跳过的阶段"尚未实现，见 §12 的 M2。
+  scanpy.qc_cells:
+    produced_by: scanpy
+    kind: identity
+  scanpy.normalized:
+    produced_by: scanpy
+    upstream: [scanpy.qc_cells]
+  scanpy.hvg:
+    produced_by: scanpy
+    upstream: [scanpy.normalized]
+  scanpy.pca:
+    produced_by: scanpy
+    upstream: [scanpy.hvg]
+  scanpy.harmony:
+    produced_by: scanpy
+    upstream: [scanpy.pca]
+  scanpy.neighbor_graph:
+    produced_by: scanpy
+    upstream: [scanpy.harmony]
+  scanpy.umap_coordinates:
+    produced_by: scanpy
+    upstream: [scanpy.neighbor_graph]
+  scanpy.cluster_labels:
+    produced_by: scanpy
+    upstream: [scanpy.neighbor_graph]
+  scanpy.markers:
+    produced_by: scanpy
+    upstream: [scanpy.cluster_labels]
+  scanpy.annotation:
+    produced_by: scanpy
+    upstream: [scanpy.cluster_labels, scanpy.markers]
+  scanpy.figures_prefilter:
+    produced_by: scanpy
+    kind: figure
+  scanpy.figures_pca:
+    produced_by: scanpy
+    upstream: [scanpy.pca]
+    kind: figure
+  scanpy.figures_umap:
+    produced_by: scanpy
+    upstream: [scanpy.umap_coordinates]
+    kind: figure
+  scanpy.figures_cluster:
+    produced_by: scanpy
+    upstream: [scanpy.cluster_labels, scanpy.umap_coordinates]
+    kind: figure
+  scanpy.figures_annotation:
+    produced_by: scanpy
+    upstream: [scanpy.annotation, scanpy.umap_coordinates]
+    kind: figure
+  scanpy.tables:
+    produced_by: scanpy
+    upstream: [scanpy.cluster_labels]
+  scanpy.h5ad:
+    produced_by: scanpy
+    upstream: [scanpy.annotation, scanpy.cluster_labels, scanpy.umap_coordinates]
+  scanpy.cell_metadata:
+    produced_by: scanpy
+    upstream: [scanpy.cluster_labels, scanpy.annotation]
+  scanpy.annotation_tsv:
+    produced_by: scanpy
+    upstream: [scanpy.cell_metadata]
+  scanpy.annotation_status:
+    produced_by: scanpy
+    upstream: [scanpy.annotation_tsv]
+  scanpy.parameters_json:
+    produced_by: scanpy
+  scanpy.task_outputs:
+    produced_by: scanpy
+    upstream: [scanpy.h5ad, scanpy.cell_metadata, scanpy.parameters_json]
+
+  # --- MethSCAn 路线 -------------------------------------------------------
+  methscan.selection_manifest:
+    produced_by: methscan_select_convert
+    kind: identity
+  methscan.cov_files:
+    produced_by: methscan_select_convert
+    upstream: [methscan.selection_manifest]
+  methscan.prepared_dir:
+    produced_by: methscan_prepare
+    upstream: [methscan.cov_files]
+  methscan.filtered_cells:
+    produced_by: methscan_filter
+    upstream: [methscan.prepared_dir]
+    kind: identity
+  methscan.smoothed:
+    produced_by: methscan_smooth
+    upstream: [methscan.filtered_cells]
+  methscan.vmr_bed:
+    produced_by: methscan_vmr
+    upstream: [methscan.smoothed]
+  methscan.matrix:
+    produced_by: methscan_vmr
+    upstream: [methscan.vmr_bed, methscan.filtered_cells]
+  methscan.scanpy_h5ad:
+    produced_by: methscan_scanpy
+    upstream: [methscan.matrix]
+  methscan.scanpy_figures:
+    produced_by: methscan_scanpy
+    upstream: [methscan.scanpy_h5ad]
+    kind: figure
+  methscan.dmr_pairwise:
+    produced_by: methscan_pairwise_dmr
+    upstream: [methscan.smoothed, methscan.filtered_cells]
+  methscan.hypodmr_top:
+    produced_by: methscan_hypo_heatmaps
+    upstream: [methscan.dmr_pairwise]
+  methscan.hypodmr_matrix:
+    produced_by: methscan_hypo_heatmaps
+    upstream: [methscan.hypodmr_top, methscan.filtered_cells]
+  methscan.hypodmr_heatmaps:
+    produced_by: methscan_hypo_heatmaps
+    upstream: [methscan.hypodmr_matrix]
+    kind: figure
+  methscan.run_summary:
+    produced_by: methscan_summary
+    upstream: [methscan.vmr_bed, methscan.dmr_pairwise, methscan.hypodmr_heatmaps]
+
+  # --- MethylVI 路线（三条特征路线共用同一训练脚本）------------------------
+  allcools.mcds:
+    produced_by: allcools_features
+    upstream: [methscan.filtered_cells]
+  allcools.h5ad:
+    produced_by: allcools_features
+    upstream: [allcools.mcds]
+  methylvi.input:
+    produced_by: allcools_features
+    upstream: [allcools.h5ad]
+  methylvi.nested_input:
+    produced_by: methylvi_features
+    upstream: [methylvi.input]
+  vmr.filtered_bed:
+    produced_by: methylvi_vmr_features
+    upstream: [methscan.vmr_bed]
+  vmr.input:
+    produced_by: methylvi_vmr_features
+    upstream: [vmr.filtered_bed]
+  vmr.nested_input:
+    produced_by: methylvi_vmr_features
+    upstream: [vmr.input]
+  pooled_dmr.bed:
+    produced_by: pooled_dmr_prepare
+    upstream: [methscan.dmr_pairwise]
+  pooled_dmr.input:
+    produced_by: pooled_dmr_counts
+    upstream: [pooled_dmr.bed]
+  vmr_dmr.combined_input:
+    produced_by: methylvi_vmr_dmr_features
+    upstream: [vmr.nested_input, pooled_dmr.input]
+  methylvi.model_dir:
+    produced_by: methylvi_train
+    upstream: [methylvi.nested_input]
+  methylvi.latent:
+    produced_by: methylvi_train
+    upstream: [methylvi.model_dir]
+  methylvi.embedding:
+    produced_by: methylvi_train
+    upstream: [methylvi.latent, methylvi.nested_input]
+  methylvi.run_summary:
+    produced_by: methylvi_train
+    upstream: [methylvi.embedding]
+  methylvi.figures:
+    produced_by: methylvi_train
+    upstream: [methylvi.embedding]
+    kind: figure
+  methylvi.methylation_qc:
+    produced_by: methylvi_train
+    upstream: [methylvi.nested_input]
+
+parameters:
+
+  # --- Scanpy：计划 §6.1 开放的四块 ----------------------------------------
+  scanpy.hvg.n_top_genes:
+    stage: scanpy
+    affects: [scanpy.hvg]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:226"]
+    default: 2000
+    verified_against: template
+    searchable: false
+    note: >-
+      改 n_hvg 改变 HVG 子集的 var 维度，因此 h5ad 的基因数随之改变。
+      闭包覆盖 QC 之后全部产物。
+  scanpy.hvg.batch_key:
+    stage: scanpy
+    affects: [scanpy.hvg]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:227"]
+    default: cohort
+    verified_against: template
+    searchable: false
+    note: >-
+      该键必须存在于合并对象的 obs 中；合并时只有 cohort（sample 列更晚才创建）。
+      配置成其它列名会在 notebook 内直接报错，runner 不做存在性校验。
+  scanpy.pca.n_comps:
+    stage: scanpy
+    affects: [scanpy.pca]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:229"]
+    default: 50
+    verified_against: template
+    searchable: false
+    note: n_comps 必须 >= n_pcs，代码未校验。
+  scanpy.pca.svd_solver:
+    stage: scanpy
+    affects: [scanpy.pca]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:229"]
+    default: arpack
+    verified_against: template
+    searchable: false
+    note: 只影响 X_pca 数值，不改变任何文件名。
+  scanpy.regress_covariates:
+    stage: scanpy
+    affects: [scanpy.pca]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:228"]
+    default: false
+    verified_against: template
+    searchable: false
+    note: >-
+      只作用于 HVG 子集的 X；marker 检验与 dotplot 用 raw，因此 marker 表达值
+      不随该参数变化，但 cluster 分组会变。
+  scanpy.harmony.max_iter:
+    stage: scanpy
+    affects: [scanpy.harmony]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:231"]
+    default: 20
+    verified_against: template
+    searchable: false
+  scanpy.harmony.sigma:
+    stage: scanpy
+    affects: [scanpy.harmony]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:232"]
+    default: 0.1
+    verified_against: template
+    searchable: false
+    note: sigma 数组长度绑定由 n_obs 派生的 Harmony 初始 cluster 数，不是独立维度。
+  scanpy.neighbors.n_pcs:
+    stage: scanpy
+    affects: [scanpy.neighbor_graph]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:230"]
+    default: 30
+    verified_against: template
+    searchable: false
+    note: 同一个 n_pcs 同时喂去批次前与去批次后两套图，无法分别搜索。
+  scanpy.neighbors.n_neighbors:
+    stage: scanpy
+    affects: [scanpy.neighbor_graph]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:230"]
+    default: 15
+    verified_against: template
+    searchable: false
+  scanpy.leiden.resolution:
+    stage: scanpy
+    affects: [scanpy.cluster_labels]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:234"]
+    default: 0.8
+    verified_against: template
+    searchable: false
+    note: >-
+      代码顺序支持计划的分层失效：UMAP 坐标先于 leiden 算出，leiden 无任何输入
+      进入 UMAP 坐标。因此 cluster 改变在语义上不需要重算坐标——但当前执行器每次
+      整体重跑 notebook，该分层尚未落地。
+  scanpy.umap.min_dist:
+    stage: scanpy
+    affects: [scanpy.umap_coordinates]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:233"]
+    default: 0.5
+    verified_against: template
+    searchable: false
+    note: 同一参数同时作用于去批次前与去批次后两套坐标。
+  scanpy.umap.spread:
+    stage: scanpy
+    affects: [scanpy.umap_coordinates]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:233"]
+    default: 1.0
+    verified_against: template
+    searchable: false
+  scanpy.seed:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:237"]
+    default: 0
+    verified_against: template
+    searchable: false
+    note: >-
+      与计划 §6.1 不符：不存在"单独的训练/降维 seed"。只有一个全局 seed，同时驱动
+      Scrublet（改变细胞集）、PCA、Harmony、两套 UMAP 与 Leiden。改 seed 等价于全链路
+      重跑，因此 affects 落在链首 qc_cells。
+  scanpy.sample_palette:
+    stage: scanpy
+    affects: [scanpy.figures_umap]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:151"]
+    default: ["#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a", "#d62728", "#ff9896", "#9467bd", "#c5b0d5", "#8c564b", "#c49c94", "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5"]
+    verified_against: template
+    searchable: false
+    note: >-
+      rendering 配置，不是科学候选或 Pareto 轴；它被明确排除在 analysis_signature
+      之外，所以换配色不会作废已审核的注释映射。
+
+  # --- Scanpy：已追踪但有意不搜（计划 §6.1 "QC 默认冻结"）------------------
+  scanpy.qc.min_genes:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:221"]
+    default: 200
+    verified_against: template
+    searchable: false
+  scanpy.qc.max_genes:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:221"]
+    default: 6000
+    verified_against: template
+    searchable: false
+  scanpy.qc.min_counts:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:221"]
+    default: 500
+    verified_against: template
+    searchable: false
+  scanpy.qc.max_mt_percent:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:221"]
+    default: 5.0
+    verified_against: template
+    searchable: false
+  scanpy.scrublet.doublet_rate_per_1000:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:225"]
+    default: 0.004
+    verified_against: template
+    searchable: false
+  scanpy.target_sum:
+    stage: scanpy
+    affects: [scanpy.normalized]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:226"]
+    default: 10000
+    verified_against: template
+    searchable: false
+    note: 归一化不属于计划 §6.1 开放的四块，登记但关闭。
+
+  # --- MethSCAn：计划 §6.2 声明可搜索 --------------------------------------
+  methscan.selection.exclude_cell_type:
+    stage: methscan_select_convert
+    affects: [methscan.selection_manifest]
+    read: ["Scripts/Methscan/00_methscan_config.sh:10"]
+    default: NA
+    verified_against: template
+    searchable: false
+    note: >-
+      细胞集入口，位于 filter 上游。改它失效 selection 及全部下游，包括 ALLCools 与
+      MethylVI 分支；粒度和 filter 参数不同，两者不能混为一谈。
+  methscan.filter.min_sites:
+    stage: methscan_filter
+    affects: [methscan.filtered_cells]
+    read: ["Scripts/Methscan/00_methscan_config.sh:19"]
+    default: 300000
+    verified_against: template
+    searchable: false
+    note: >-
+      闭包必经 ALLCools 与 MethylVI 输入。两条独立通道都成立：任务 DAG 有显式边
+      （plan_workflow.py:119-121），且下游把过滤细胞名单当作细胞集本身消费
+      （allcools/01_prepare_allcools.py:144-156、vmr/01_prepare_vmr_inputs.py:155-156）。
+  methscan.filter.min_meth_percent:
+    stage: methscan_filter
+    affects: [methscan.filtered_cells]
+    read: ["Scripts/Methscan/00_methscan_config.sh:20"]
+    default: 50
+    verified_against: template
+    searchable: false
+    note: 百分数语义与端点包含性由外部 methscan CLI 决定，本仓库无测试覆盖。
+  methscan.filter.max_meth_percent:
+    stage: methscan_filter
+    affects: [methscan.filtered_cells]
+    read: ["Scripts/Methscan/00_methscan_config.sh:21"]
+    default: 100
+    verified_against: template
+    searchable: false
+    note: 100 只是合法域上限，不构成有效的上过滤。
+  methscan.smooth.bandwidth:
+    stage: methscan_smooth
+    affects: [methscan.smoothed]
+    read: ["Scripts/Methscan/00_methscan_config.sh:22"]
+    default: 1000
+    verified_against: template
+    searchable: false
+    note: >-
+      smooth 就地写回 03_filtered/smoothed/，与 filter 产物共享目录树。若要按目录
+      粒度失效，必须区分 03_filtered/<chrom>.npz 与 03_filtered/smoothed/<chrom>.csv。
+  methscan.scan.bandwidth:
+    stage: methscan_vmr
+    affects: [methscan.vmr_bed]
+    read: ["Scripts/Methscan/00_methscan_config.sh:23"]
+    default: 2000
+    verified_against: template
+    searchable: false
+  methscan.scan.stepsize:
+    stage: methscan_vmr
+    affects: [methscan.vmr_bed]
+    read: ["Scripts/Methscan/00_methscan_config.sh:24"]
+    default: 100
+    verified_against: template
+    searchable: false
+  methscan.scan.var_threshold:
+    stage: methscan_vmr
+    affects: [methscan.vmr_bed]
+    read: ["Scripts/Methscan/00_methscan_config.sh:25"]
+    default: [0.01, 0.02, 0.05]
+    verified_against: template
+    searchable: false
+    note: >-
+      结构参数：改变它改变产物数量（按阈值展开分支）。已实现为独立任务，
+      未声明阈值会被 run_methscan_branch.sbatch:13 拒绝。
+  methscan.min_cells:
+    stage: methscan_shared_min_cells
+    affects: [methscan.vmr_bed, methscan.dmr_pairwise]
+    read: ["Scripts/Methscan/00_methscan_config.sh:26", "Scripts/Methscan/00_methscan_config.sh:27"]
+    default: 6
+    verified_against: template
+    searchable: false
+    note: >-
+      scan 与 DMR 共用 analysis.methscan.min_cells / SCMO_MIN_CELLS；这是一个规范参数，
+      直接影响两条分支，不能登记成两个看似可独立搜索的参数。
+  methscan.dmr.bandwidth:
+    stage: methscan_pairwise_dmr
+    affects: [methscan.dmr_pairwise]
+    read: ["Scripts/Methscan/00_methscan_config.sh:28"]
+    default: 2000
+    verified_against: template
+    searchable: false
+    note: task_adapter 未注入，托管路径下只能靠环境变量覆盖。
+  methscan.dmr.stepsize:
+    stage: methscan_pairwise_dmr
+    affects: [methscan.dmr_pairwise]
+    read: ["Scripts/Methscan/00_methscan_config.sh:29"]
+    default: 1000
+    verified_against: template
+    searchable: false
+    note: task_adapter 未注入。
+  methscan.dmr.threshold:
+    stage: methscan_pairwise_dmr
+    affects: [methscan.dmr_pairwise]
+    read: ["Scripts/Methscan/00_methscan_config.sh:30"]
+    default: 0.02
+    verified_against: template
+    searchable: false
+    note: task_adapter 未注入。
+  methscan.hypodmr.raw_p:
+    stage: methscan_hypo_heatmaps
+    affects: [methscan.hypodmr_top, pooled_dmr.bed]
+    read: ["Scripts/Methscan/00_methscan_config.sh:34"]
+    default: 0.01
+    verified_against: template
+    searchable: false
+    note: >-
+      跨路线边：task_adapter.py:310 把同一个 raw_p 传给 pooled_dmr_prepare，
+      因此它同时影响 MethylVI 的 vmr_dmr 特征路线。
+  methscan.hypodmr.min_abs_diff:
+    stage: methscan_hypo_heatmaps
+    affects: [methscan.hypodmr_top, pooled_dmr.bed]
+    read: ["Scripts/Methscan/00_methscan_config.sh:35"]
+    default: 0.25
+    verified_against: template
+    searchable: false
+  methscan.hypodmr.top_per_cell_type:
+    stage: methscan_hypo_heatmaps
+    affects: [methscan.hypodmr_top]
+    read: ["Scripts/Methscan/00_methscan_config.sh:36"]
+    default: 200
+    verified_against: template
+    searchable: false
+    note: 与 MethylVI 的 pooled-DMR 特征选择相互独立，不得合并为一条链。
+  methscan.scanpy.pca_components:
+    stage: methscan_scanpy
+    affects: [methscan.scanpy_h5ad]
+    read: ["Scripts/Methscan/00_methscan_config.sh:51"]
+    default: 30
+    verified_against: template
+    searchable: false
+    note: >-
+      同时是 imputation 的 n_components，PCA 与缺失值处理在同一脚本内耦合；
+      实际生效值会被 min(n_pcs, shape-1) 截断并记入 run_parameters.json。
+  methscan.scanpy.neighbors:
+    stage: methscan_scanpy
+    affects: [methscan.scanpy_h5ad]
+    read: ["Scripts/Methscan/00_methscan_config.sh:52"]
+    default: 15
+    verified_against: template
+    searchable: false
+  methscan.scanpy.leiden_resolution:
+    stage: methscan_scanpy
+    affects: [methscan.scanpy_h5ad]
+    read: ["Scripts/Methscan/00_methscan_config.sh:53"]
+    default: 0.8
+    verified_against: template
+    searchable: false
+    note: 依赖 neighbors 但不反向失效；UMAP 坐标与 cluster 可分开签名。
+  methylvi.seed:
+    stage: shared_methylation_seed
+    affects: [methscan.scanpy_h5ad, allcools.h5ad, methylvi.model_dir]
+    read: ["Scripts/Common/task_adapter.py:179", "Scripts/Methscan/00_methscan_config.sh:54", "Scripts/Methylvi/shared/04_train_methylvi.py:30"]
+    default: 0
+    verified_against: template
+    searchable: false
+    note: >-
+      analysis.methylvi.seed 是三条甲基化路径的规范来源：同时驱动 MethSCAn 降维、
+      ALLCools 聚类与 MethylVI 训练/graph/UMAP。首版作为协议字段冻结。
+
+  # --- MethylVI：计划 §6.3 声明 8 个，实际可搜索 3 个 ----------------------
+  methylvi.features.feature_count:
+    stage: methylvi_features
+    affects: [methylvi.nested_input]
+    read: ["Scripts/Methylvi/shared/06_subset_methylvi_input.py:17"]
+    default: [10000, 30000]
+    verified_against: template
+    searchable: false
+    note: >-
+      最大值是硬编码的"规范构建"，不是可搜索轴；只有更小的嵌套目标可选，嵌套性由
+      06_subset_methylvi_input.py:32-33 校验，满足 §9.2 单调不变量。
+      vmr_dmr 路线的特征数另含零重叠 DMR，唯一记录处是 input.summary.json。
+  methylvi.train.batch_size:
+    stage: methylvi_train
+    affects: [methylvi.model_dir]
+    read: ["Scripts/Methylvi/shared/04_train_methylvi.py:28"]
+    default: 32
+    verified_against: template
+    searchable: false
+    note: 环境变量硬读取；run_summary.json 不记录它。
+  methylvi.train.epochs:
+    stage: methylvi_train
+    affects: [methylvi.model_dir, methylvi.run_summary]
+    read: ["Scripts/Methylvi/shared/04_train_methylvi.py:27"]
+    default: 500
+    verified_against: template
+    searchable: false
+    note: >-
+      唯一被记录进 run_summary 的训练参数，且记录的是请求值而非实际或最佳 epoch。
+      这是 §9.2 epoch 保真度阶梯的挂载点。
+  methylvi.train.validation_fraction:
+    stage: methylvi_train
+    affects: [methylvi.model_dir]
+    read: ["Scripts/Common/task_adapter.py:180", "Scripts/Methylvi/shared/04_train_methylvi.py:34"]
+    default: 0.1
+    verified_against: template
+    searchable: false
+    note: 影响训练/验证拆分与 early stopping；首版作为比较协议字段冻结，但必须进入缓存键。
+
+# --- 计划声明可搜索、代码中不存在 ------------------------------------------
+frozen:
+  scanpy.neighbors.metric: >-
+    计划 §6.1 列为可搜索。全仓库无该键，sc.pp.neighbors 未传 metric
+    （run_scanpy_notebook.py 的白名单与 notebook 调用点均无），实现走 Scanpy 默认
+    euclidean。写进配置只会被静默忽略。
+  scanpy.visual.symbol:
+    计划 §6.1 声明视觉参数可搜索。图形符号是 notebook 内的字面量，不是 sidecar 键。
+  scanpy.visual.color:
+    同 symbol：颜色（除 sample_palette）是硬编码字面量。
+  scanpy.visual.legend:
+    同 symbol：legend_loc 是硬编码字面量。
+  scanpy.visual.size:
+    同 symbol：图件尺寸与点大小是硬编码字面量。
+  methscan.scanpy.impute_iterations: >-
+    计划 §6.2 声明"缺失值处理"可搜索。04_vmr_scanpy.py:29 硬编码 10，无环境变量、
+    无 sbatch 传递、无 adapter 注入。
+  methscan.scanpy.min_region_cell_fraction: >-
+    参数存在（00_methscan_config.sh:49）但 task_adapter 未注入，托管 DAG 路径下
+    项目配置无法改它；可搜索性在托管路径上断裂。
+  methscan.scanpy.min_cell_regions:
+    同 min_region_cell_fraction：参数存在但未注入。
+  methylvi.model.n_latent: >-
+    计划 §6.3 声明可搜索。04_train_methylvi.py:60 硬编码 20，无 CLI、无环境变量。
+    另有硬阻塞：vmr_dmr/03_summarize_vmr_dmr_models.py:40 断言 embedding.n_vars == 20，
+    开放该参数必须一并改造。
+  methylvi.model.n_hidden:
+    计划 §6.3 声明可搜索。04_train_methylvi.py:60 硬编码 128。
+  methylvi.model.n_layers:
+    计划 §6.3 声明可搜索。04_train_methylvi.py:60 硬编码 1。
+  methylvi.train.learning_rate: >-
+    计划 §6.3 声明可搜索，缺口最大：04_train_methylvi.py 全文无 lr / optimizer 符号，
+    model.train 未传该参数，无读取点、无默认值记录、无产物。实际值来自 scvi-tools 内部默认，
+    仓库既未固定也未记录。
+  methylvi.train.early_stopping: >-
+    计划 §6.3 声明可搜索。04_train_methylvi.py:70 硬编码 True，无 patience、
+    无 monitor metric、无 min_delta，没有可搜索的取值空间。
+  methylvi.train.stop_reason: >-
+    计划 §6.3 要求记录停止原因。全仓库无落盘：early-stop 触发 epoch、"达到 max_epochs"、
+    收敛或超时标记均不存在。
+  methylvi.train.checkpoint_restore: >-
+    计划 §6.3 要求区分"精确恢复"与"warm start"。两者都不存在：Methylvi 子树内无任何
+    模型加载调用，每次都是全新构造并 save(overwrite=True)。需要从零建立 checkpoint 契约。

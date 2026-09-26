@@ -67,7 +67,10 @@ verify() {
   [[ -x "$mvi_python" ]] || { echo "ERROR: invalid MethylVI environment: $SCMO_METHYLVI_ENV" >&2; exit 1; }
   command -v bedtools >/dev/null || { echo "ERROR: bedtools is required for blacklist filtering" >&2; exit 1; }
   command -v intersectBed >/dev/null || { echo "ERROR: intersectBed is required for blacklist filtering" >&2; exit 1; }
-  "$allc_python" -c 'import ALLCools,anndata,pandas,scanpy; print("ALLCools environment OK", ALLCools.__version__)'
+  # Several late imports are optional metadata dependencies in ALLCools 1.1.1
+  # but mandatory for the maintained generate/cluster route. Import the exact
+  # clustering API here before reading hundreds of ALLCs.
+  "$allc_python" -c 'import ALLCools,anndata,dask,imblearn,openTSNE,pandas,scanpy,zarr; from ALLCools.clustering import ConsensusClustering,binarize_matrix,lsi,significant_pc_test,tsne; print("ALLCools environment OK", ALLCools.__version__, "zarr", zarr.__version__, "dask", dask.__version__, "openTSNE", openTSNE.__version__, "imblearn", imblearn.__version__)'
   "$mvi_python" -c 'import anndata,mudata,scanpy,scvi,torch; from scvi.external import METHYLVI; print("MethylVI environment OK", scvi.__version__)'
   "$allc_python" "$here/01_prepare_allcools.py" --verify-only
 }

@@ -1,0 +1,90 @@
+{
+  "record_version": 1,
+  "kind": "noise_floor",
+  "protocol": "plan.md 13.1 Wrapper Equivalence -- baseline self-reproducibility",
+  "measured_at": "2026-09-25",
+  "label": "scanpy / IPF_final, 2026-09-20",
+  "baseline_runs": [
+    "scanpy-20260920-06/scanpy/iterations/scanpy-20260920-06/candidate_analysis.h5ad",
+    "scanpy-20260920-07/scanpy/IPF_final_confirmed.h5ad"
+  ],
+  "note": "两次独立执行同一配置，间隔 1h45m，analysis_signature 相同。协议要求的最少执行次数即为 2，因此本记录是点估计而非分布；测得值为零，含义是「未观察到波动」，不是「已证明永不波动」。",
+  "scope": {
+    "machine": "ctl01",
+    "python": "3.9.23",
+    "package_versions": {
+      "scanpy": "1.9.3",
+      "anndata": "0.9.2",
+      "numpy": "1.26.4",
+      "scipy": "1.13.1",
+      "harmonypy": "0.0.10",
+      "scrublet": "absent"
+    },
+    "data": "IPF_final Data/RNA (9 samples), Data/ALLC_raw",
+    "analysis_signature": "e56245acfebeefa49be7dec68995a83390b5ebddcc97ed3ebe36aac303b31379",
+    "not_claimed": "跨环境、跨数据集、跨软件版本的等价性"
+  },
+  "noise_floor": {
+    "schema_version": 1,
+    "label": "scanpy / IPF_final, 2026-09-20",
+    "observations": 2,
+    "artifacts": {
+      "cell_ids": {
+        "artifact_class": "identity",
+        "observations": 2,
+        "deterministic": true,
+        "max_abs_delta": 0.0,
+        "max_rel_delta": 0.0
+      },
+      "harmony": {
+        "artifact_class": "float",
+        "observations": 2,
+        "deterministic": true,
+        "max_abs_delta": 0.0,
+        "max_rel_delta": 0.0
+      },
+      "leiden": {
+        "artifact_class": "discrete",
+        "observations": 2,
+        "deterministic": true,
+        "max_abs_delta": 0.0,
+        "max_rel_delta": 0.0
+      },
+      "n_cells": {
+        "artifact_class": "integer",
+        "observations": 2,
+        "deterministic": true,
+        "max_abs_delta": 0.0,
+        "max_rel_delta": 0.0
+      },
+      "n_genes": {
+        "artifact_class": "integer",
+        "observations": 2,
+        "deterministic": true,
+        "max_abs_delta": 0.0,
+        "max_rel_delta": 0.0
+      },
+      "pca": {
+        "artifact_class": "float",
+        "observations": 2,
+        "deterministic": true,
+        "max_abs_delta": 0.0,
+        "max_rel_delta": 0.0
+      },
+      "umap_after_harmony": {
+        "artifact_class": "float",
+        "observations": 2,
+        "deterministic": true,
+        "max_abs_delta": 0.0,
+        "max_rel_delta": 0.0
+      },
+      "umap_before_harmony": {
+        "artifact_class": "float",
+        "observations": 2,
+        "deterministic": true,
+        "max_abs_delta": 0.0,
+        "max_rel_delta": 0.0
+      }
+    }
+  }
+}

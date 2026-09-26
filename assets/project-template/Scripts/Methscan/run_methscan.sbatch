@@ -103,12 +103,15 @@ for var_threshold in "${scan_var_thresholds[@]}"; do
   matrix_dir="$output_dir/05_matrix/$label"
   scanpy_dir="$output_dir/06_scanpy/$label"
   mkdir -p "$scan_dir"
+  vmr_input="$scan_dir/input"
+  run_stage "05_prepare_scan_input_${label}" "$methscan_python" \
+    "$script_dir/03_prepare_vmr_input.py" --source "$output_dir/03_filtered" --output "$vmr_input"
   run_stage "05_scan_${label}" "$methscan_exe" scan --bandwidth "$scan_bandwidth" \
     --stepsize "$scan_stepsize" --var-threshold "$var_threshold" --min-cells "$scan_min_cells" \
-    --threads "${SLURM_CPUS_PER_TASK:-$threads}" "$output_dir/03_filtered" "$scan_dir/VMRs.bed"
+    --threads "${SLURM_CPUS_PER_TASK:-$threads}" "$vmr_input" "$scan_dir/VMRs.bed"
   run_stage "06_matrix_${label}" "$methscan_exe" matrix \
     --threads "${SLURM_CPUS_PER_TASK:-$threads}" "$scan_dir/VMRs.bed" \
-    "$output_dir/03_filtered" "$matrix_dir"
+    "$vmr_input" "$matrix_dir"
   run_stage "07_scanpy_${label}" "$scanpy_python" "$script_dir/04_vmr_scanpy.py" \
     --matrix "$matrix_dir/mean_shrunken_residuals.csv.gz" \
     --expected-cell-ids "$output_dir/03_filtered/column_header.txt" \

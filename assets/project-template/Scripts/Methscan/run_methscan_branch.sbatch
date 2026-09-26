@@ -26,8 +26,10 @@ current_stage=initialization
 on_error() { local code=$?; trap - ERR; record_stage "$current_stage" "failed(exit=$code)"; exit "$code"; }
 trap on_error ERR
 run_stage() { current_stage=$1; shift; record_stage "$current_stage" running; "$methscan_python" "$script_dir/06_run_with_resources.py" --output "$output_dir/${label}.${current_stage}.resources.json" -- "$@"; record_stage "$current_stage" complete; }
-run_stage scan "$methscan_exe" scan --bandwidth "$scan_bandwidth" --stepsize "$scan_stepsize" --var-threshold "$threshold" --min-cells "$scan_min_cells" --threads "${SLURM_CPUS_PER_TASK:-$threads}" "$output_dir/03_filtered" "$scan_dir/VMRs.bed"
-run_stage matrix "$methscan_exe" matrix --threads "${SLURM_CPUS_PER_TASK:-$threads}" "$scan_dir/VMRs.bed" "$output_dir/03_filtered" "$matrix_dir"
+vmr_input="$scan_dir/input"
+run_stage prepare_scan_input "$methscan_python" "$script_dir/03_prepare_vmr_input.py" --source "$output_dir/03_filtered" --output "$vmr_input"
+run_stage scan "$methscan_exe" scan --bandwidth "$scan_bandwidth" --stepsize "$scan_stepsize" --var-threshold "$threshold" --min-cells "$scan_min_cells" --threads "${SLURM_CPUS_PER_TASK:-$threads}" "$vmr_input" "$scan_dir/VMRs.bed"
+run_stage matrix "$methscan_exe" matrix --threads "${SLURM_CPUS_PER_TASK:-$threads}" "$scan_dir/VMRs.bed" "$vmr_input" "$matrix_dir"
 run_stage scanpy "$scanpy_python" "$script_dir/04_vmr_scanpy.py" --matrix "$matrix_dir/mean_shrunken_residuals.csv.gz" --expected-cell-ids "$output_dir/03_filtered/column_header.txt" --cell-metadata "$output_dir/00_scanpy_selected/input_manifest.tsv" --output-dir "$scanpy_dir" --min-region-cell-fraction "$vmr_min_cell_fraction" --min-cell-regions "$cell_min_regions" --n-pcs "$pca_components" --neighbors "$neighbors" --leiden-resolution "$leiden_resolution" --seed "$random_seed"
 touch "$output_dir/${label}.COMPLETE"
 record_stage branch workflow_complete

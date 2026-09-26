@@ -19,9 +19,17 @@ from pathlib import Path
 from _common import (
     HOST_ROLE_STANDALONE, HOST_ROLE_SUBMIT, TERMINAL_BAD_STATES, WorkflowError,
     effective_backend, host_role, host_role_source, load_environments, load_project, load_samples,
+    notebook_cells_digest,
     parse_memory_mb, parse_walltime_seconds, plan_data_sources, project_files, resolve_path,
     normalize_job_state, sha256_file, signature, stored_data_sources, write_json,
 )
+
+
+# Importing torch/scvi on a cold shared filesystem routinely takes longer than
+# 30 seconds even when the environment is healthy.  This probe is a preflight,
+# not an interactive request; allow enough time to distinguish cold start from
+# a broken command while still bounding a hung version check.
+VERSION_CHECK_TIMEOUT_SECONDS = 120
 
 
 # --- ALLC fan-out ------------------------------------------------------------
@@ -394,6 +402,13 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
     use_allc = selected_routes is None or bool(selected_routes - {"scanpy"})
     rna_samples = all_rna_samples if use_rna else []
     allc_samples = all_allc_samples if use_allc else []
+    if use_rna:
+        palette = cfg.get("analysis", {}).get("scanpy", {}).get("sample_palette", [])
+        if not isinstance(palette, list) or len(palette) < len(all_rna_samples):
+            errors.append(
+                "analysis.scanpy.sample_palette must provide at least %d colours for %d RNA samples"
+                % (len(all_rna_samples), len(all_rna_samples))
+            )
     allc_inventory, allc_cell_ids, validation_jobs = [], [], []
     context = str(cfg.get("analysis", {}).get("allcools", {}).get("mc_context", "CGN"))
     thresholds = cfg.get("analysis", {}).get("methscan", {}).get("vmr_thresholds", [0.01, 0.02, 0.05])
@@ -578,7 +593,11 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
             item["status"] = "present" if executable and executable.exists() else "optional_absent"
         if required and env["version_command"].strip() and item["status"] == "present":
             try:
-                output = subprocess.check_output(shlex.split(env["version_command"]), stderr=subprocess.STDOUT, timeout=30)
+                output = subprocess.check_output(
+                    shlex.split(env["version_command"]),
+                    stderr=subprocess.STDOUT,
+                    timeout=VERSION_CHECK_TIMEOUT_SECONDS,
+                )
                 item["version"] = output.decode("utf-8", "replace").strip().splitlines()[0]
             except (OSError, subprocess.SubprocessError) as exc:
                 errors.append("version check failed for %s: %s" % (env["stage"], exc))
@@ -671,6 +690,11 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
         if code_root.exists():
             for path in sorted(item for item in code_root.rglob("*") if item.is_file() and item.suffix in code_suffixes):
                 code_hashes[str(path.relative_to(files["root"]))] = sha256_file(path)
+            # Notebooks are executable inputs, but outputs, execution counts and
+            # review metadata are not. Hash only cell type/source so a code-cell
+            # edit invalidates a frozen plan without making normal execution do so.
+            for path in sorted(code_root.rglob("*.ipynb")):
+                code_hashes[str(path.relative_to(files["root"]))] = notebook_cells_digest(path)
     spec_root = files["root"] / "environment-specs"
     if spec_root.exists():
         for path in sorted(spec_root.glob("*.yaml")):

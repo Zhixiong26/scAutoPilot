@@ -150,7 +150,7 @@ def main() -> None:
         raise RuntimeError(f"Only {len(regions):,} source VMRs; cannot select {args.target_features:,}")
     # Initialize the parent process as well as ProcessPool workers so checkpoint
     # validation uses the same feature bound during assembly.
-    init_worker(lookup, len(regions))
+    init_worker(lookup, len(regions), mc_prefix)
     allc_table = pd.read_csv(args.allc_table, sep="\t", header=None, names=["cell_id", "path"], dtype=str)
     if allc_table.empty or allc_table.cell_id.duplicated().any():
         raise ValueError("ALLC table is empty or contains duplicate cell IDs")

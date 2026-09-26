@@ -14,6 +14,24 @@ dependencies:
   - samtools
   - htslib
   - pysam
+  # ALLCools 1.1.1 imports Zarr only when generate-dataset writes its first
+  # chunk, so this must be explicit rather than left as an undeclared optional
+  # dependency. Pin the v2 API expected by the bundled xarray/ALLCools stack.
+  - zarr<3
+  # ALLCools declares Dask only in its optional `analysis` extra, but its MCDS
+  # module imports Dask unconditionally when generate-dataset finalizes output.
+  # Keep a Python-3.9-compatible series aligned with the bundled xarray stack.
+  - dask-core<2025
+  # The maintained ALLCools clustering stage calls ALLCools' t-SNE wrapper;
+  # ALLCools declares openTSNE only in its optional `analysis` extra.
+  # 1.0.3+ no longer publishes cp39 Linux wheels; pin the last compatible
+  # manylinux build so Python 3.9 environments do not require a newer C++
+  # toolchain to build openTSNE from source.
+  - openTSNE==1.0.2
+  # ConsensusClustering imports BalancedRandomForestClassifier from the
+  # optional ALLCools analysis stack. Pin the last release that supports the
+  # Python 3.9 runtime used by this environment.
+  - imbalanced-learn==0.12.4
   - pip:
       - ALLCools==1.1.1
       - harmonypy==0.0.10

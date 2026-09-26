@@ -51,9 +51,15 @@ require_file() {
   [[ -s "$1" ]] || { echo "ERROR: required file missing or empty: $1" >&2; exit 1; }
 }
 
+require_marker() {
+  [[ -f "$1" ]] || { echo "ERROR: completion marker missing: $1" >&2; exit 1; }
+}
+
 verify() {
   if [[ -n "$VMR_INPUT_MANIFEST" ]]; then
-    require_file "$VMR_METHSCAN_RUN_DIR/smooth.COMPLETE"
+    # Completion markers are intentionally zero-byte sentinel files. Requiring
+    # non-zero size here rejects a valid completed MethSCAn smooth stage.
+    require_marker "$VMR_METHSCAN_RUN_DIR/smooth.COMPLETE"
     require_file "$VMR_FILTERED_CELL_IDS"
   fi
   [[ -n "$VMR_SOURCE_BED" && -s "$VMR_SOURCE_BED" ]] || {

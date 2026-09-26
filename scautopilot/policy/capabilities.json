@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "searchable": [
+    "scanpy.hvg.n_top_genes",
+    "scanpy.hvg.batch_key",
+    "scanpy.pca.n_comps",
+    "scanpy.pca.svd_solver",
+    "scanpy.regress_covariates",
+    "scanpy.harmony.max_iter",
+    "scanpy.harmony.sigma",
+    "scanpy.neighbors.n_pcs",
+    "scanpy.neighbors.n_neighbors",
+    "scanpy.leiden.resolution",
+    "scanpy.umap.min_dist",
+    "scanpy.umap.spread",
+    "methscan.smooth.bandwidth",
+    "methscan.scan.bandwidth",
+    "methscan.scan.stepsize",
+    "methscan.scan.var_threshold",
+    "methscan.scanpy.pca_components",
+    "methscan.scanpy.neighbors",
+    "methscan.scanpy.leiden_resolution",
+    "methylvi.features.feature_count",
+    "methylvi.train.batch_size",
+    "methylvi.train.epochs"
+  ],
+  "rendering": [
+    "scanpy.sample_palette"
+  ],
+  "session_opt_in": [
+    "methscan.selection.exclude_cell_type",
+    "methscan.filter.min_sites",
+    "methscan.filter.min_meth_percent",
+    "methscan.filter.max_meth_percent"
+  ]
+}

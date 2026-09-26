@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import gzip
+import importlib.util
 import itertools
 import json
 import os
@@ -42,7 +43,7 @@ from init_project import main as unused_init_main  # noqa: F401,E402
 from inspect_resources import choose, enrich_nodes, inspect as inspect_resources, parse_scontrol, parse_sinfo  # noqa: E402
 from inspect_run import TERMINAL_BAD, inspect as inspect_run  # noqa: E402
 from plan_workflow import make_tasks  # noqa: E402
-from submit_workflow import slurm_job_state, submit  # noqa: E402
+from submit_workflow import slurm_dependency_argument, slurm_job_state, submit  # noqa: E402
 import validate_project as validate_script  # noqa: E402
 from validate_project import (allc_cell_id, read_chunk_result, split_allc_chunks, validate,
                               validate_allc_record, wait_for_jobs)  # noqa: E402
@@ -570,6 +571,67 @@ class SkillTests(unittest.TestCase):
             self.assertTrue(all(item["action"] == "create" for item in result["actions"]))
             self.assertTrue(all("/.environments/" in item["prefix"] for item in result["actions"]))
 
+    def test_allcools_environment_declares_and_probes_late_runtime_dependencies(self):
+        spec = (ROOT / "assets/project-template/environment-specs/analysis-core.yaml").read_text(
+            encoding="utf-8"
+        )
+        runner = (ROOT / "assets/project-template/Scripts/Methylvi/allcools/run.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("zarr<3", spec)
+        self.assertIn("dask-core<2025", spec)
+        self.assertIn("openTSNE==1.0.2", spec)
+        self.assertIn("imbalanced-learn==0.12.4", spec)
+        probe = "".join(environment_bootstrap.PROFILES["analysis_core"]["check"])
+        self.assertIn("dask", probe)
+        self.assertIn("openTSNE", probe)
+        self.assertIn("imblearn", probe)
+        self.assertIn("zarr", probe)
+        self.assertIn("dask", runner)
+        self.assertIn("ALLCools.clustering", runner)
+        self.assertIn("openTSNE", runner)
+        self.assertIn("imblearn", runner)
+        self.assertIn("zarr", runner)
+
+    def test_allcools_runtime_compatibility_guards_are_packaged(self):
+        cluster = (
+            ROOT
+            / "assets/project-template/Scripts/Methylvi/allcools/02_cluster_allcools.py"
+        ).read_text(encoding="utf-8")
+        compat = (
+            ROOT
+            / "assets/project-template/Scripts/Methylvi/allcools/allcools_compat.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("normalize_feature_coordinate_dims", cluster)
+        self.assertIn("ensure_sparse_compatible_score_dtype", cluster)
+        self.assertIn("_consensus_module._leiden_runner = leiden_runner_cells_by_runs", cluster)
+        self.assertIn("return pd.DataFrame(columns)", compat)
+
+    def test_vmr_route_treats_complete_as_a_marker_not_a_data_file(self):
+        runner = (ROOT / "assets/project-template/Scripts/Methylvi/vmr/run.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('require_marker "$VMR_METHSCAN_RUN_DIR/smooth.COMPLETE"', runner)
+        self.assertNotIn('require_file "$VMR_METHSCAN_RUN_DIR/smooth.COMPLETE"', runner)
+
+    def test_vmr_parent_worker_receives_the_methylation_context(self):
+        builder = (
+            ROOT / "assets/project-template/Scripts/Methylvi/vmr/02_build_vmr_methylvi_input.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("init_worker(lookup, len(regions), mc_prefix)", builder)
+        self.assertNotIn("init_worker(lookup, len(regions))\n", builder)
+
+    def test_task_adapter_exports_complete_methylvi_training_environment(self):
+        adapter = (
+            ROOT / "assets/project-template/Scripts/Common/task_adapter.py"
+        ).read_text(encoding="utf-8")
+        for variable in (
+            "SCMO_BATCH_KEY", "SCMO_CELLTYPE_KEY", "SCMO_SUPERVISED_TARGET_KEY",
+            "SCMO_SUPERVISED_TARGET_WEIGHTS", "SCMO_SUPERVISED_NEIGHBORS",
+            "SCMO_SUPERVISED_MIN_DIST",
+        ):
+            self.assertIn('"%s"' % variable, adapter)
+
     def test_environment_bootstrap_execute_updates_manifest(self):
         with tempfile.TemporaryDirectory() as temp:
             project = self.generate(Path(temp), "allc")
@@ -724,6 +786,17 @@ class SkillTests(unittest.TestCase):
             self.assertIn("vmr_thresholds must be a non-empty list", " ".join(result["errors"]))
             self.assertIn("feature_targets must be a non-empty list", " ".join(result["errors"]))
 
+    def test_short_scanpy_palette_is_rejected_before_submission(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.generate(Path(temp), "rna")
+            analysis_path = project / "config/analysis.yaml"
+            analysis = json.loads(analysis_path.read_text())
+            analysis["analysis"]["scanpy"]["sample_palette"] = []
+            analysis_path.write_text(json.dumps(analysis))
+            result = validate(project, selected_routes={"scanpy"})
+            self.assertEqual(result["status"], "invalid")
+            self.assertIn("sample_palette", " ".join(result["errors"]))
+
     def test_task_registry_and_output_evidence_fail_closed(self):
         self.assertTrue(task_is_implemented("methylvi_vmr_0.02_10000", {}))
         self.assertTrue(task_is_implemented("future_task", {"future_*": ["/bin/true"]}))
@@ -747,6 +820,19 @@ class SkillTests(unittest.TestCase):
             after = validate(project)
             self.assertEqual(before["code_signature"], after["code_signature"])
             self.assertEqual(before["input_signature"], after["input_signature"])
+
+    def test_notebook_source_is_inside_execution_signature(self):
+        with tempfile.TemporaryDirectory() as temp:
+            project = self.generate(Path(temp), "rna")
+            before = validate(project)
+            notebook = project / "Scripts/Scanpy/Notebooks/scanpy_workflow.ipynb"
+            payload = json.loads(notebook.read_text())
+            code_cell = next(cell for cell in payload["cells"] if cell.get("cell_type") == "code")
+            code_cell["source"] = list(code_cell.get("source", [])) + ["\nEXECUTABLE_CHANGE = True\n"]
+            notebook.write_text(json.dumps(payload))
+            after = validate(project)
+            self.assertNotEqual(before["code_signature"], after["code_signature"])
+            self.assertNotEqual(before["input_signature"], after["input_signature"])
 
     def test_override_records_child_exit_code_before_evidence_failure(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1733,6 +1819,84 @@ class SkillTests(unittest.TestCase):
         with mock.patch("submit_workflow.subprocess.check_output", side_effect=[b"", b""]):
             with self.assertRaises(WorkflowError):
                 slurm_job_state("103")
+
+    def test_slurm_throttle_wait_does_not_become_a_scientific_dependency(self):
+        self.assertEqual(
+            slurm_dependency_argument(["11", "12"], ["21"]),
+            "afterok:11:12,afterany:21",
+        )
+        self.assertEqual(slurm_dependency_argument([], ["21"]), "afterany:21")
+        self.assertEqual(slurm_dependency_argument(["11"], []), "afterok:11")
+        self.assertEqual(slurm_dependency_argument([], []), "")
+
+    def test_allc_discovery_preserves_the_visible_data_index_pair(self):
+        """Resolving only a data symlink can separate it from its paired .tbi."""
+        script = ROOT / "assets/project-template/Scripts/Methscan/01_select_scanpy_cells.py"
+        spec = importlib.util.spec_from_file_location("select_scanpy_cells_test", script)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            archive = root / "archive"
+            visible = root / "visible"
+            archive.mkdir()
+            visible.mkdir()
+            data_target = archive / "archive-object.gz"
+            index_target = archive / "unrelated-index-name.tbi"
+            data_target.write_bytes(b"allc")
+            index_target.write_bytes(b"index")
+            data_link = visible / "cell_allc.gz"
+            index_link = visible / "cell_allc.gz.tbi"
+            data_link.symlink_to(data_target)
+            index_link.symlink_to(index_target)
+
+            rows = module.discover_allcs([{
+                "sample_id": "S1", "allc_root": str(visible),
+                "allc_glob": "*_allc.gz", "cell_id_prefix": "S1",
+            }])
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(Path(rows[0]["source_path"]), data_link.absolute())
+            self.assertEqual(Path(rows[0]["source_index"]), index_link.absolute())
+            self.assertTrue(Path(rows[0]["source_path"] + ".tbi").is_file())
+
+    def test_vmr_scan_view_records_and_excludes_empty_smoothed_chromosomes(self):
+        script = ROOT / "assets/project-template/Scripts/Methscan/03_prepare_vmr_input.py"
+        spec = importlib.util.spec_from_file_location("prepare_vmr_input_test", script)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / "filtered"
+            smooth = source / "smoothed"
+            smooth.mkdir(parents=True)
+            (source / "column_header.txt").write_text("cell_1\n", encoding="utf-8")
+            for chrom in ("chr1", "chrEmpty"):
+                (source / (chrom + ".npz")).write_bytes(b"non-empty sparse matrix placeholder")
+            (smooth / "chr1.csv").write_text("0.1\n", encoding="utf-8")
+            (smooth / "chrEmpty.csv").write_bytes(b"")
+
+            view = root / "view"
+            manifest = module.build_view(source, view)
+            self.assertEqual(manifest["included_chromosomes"], ["chr1"])
+            self.assertEqual(manifest["excluded_chromosomes"], [{
+                "chromosome": "chrEmpty", "reason": "empty_smoothed_values",
+            }])
+            self.assertTrue((view / "chr1.npz").is_symlink())
+            self.assertFalse((view / "chrEmpty.npz").exists())
+            self.assertIn("chrEmpty\tempty_smoothed_values",
+                          (view / "excluded_chromosomes.tsv").read_text(encoding="utf-8"))
+            self.assertTrue((source / "chrEmpty.npz").is_file(), "source data must remain untouched")
+
+    def test_candidate_marker_panel_keys_match_leiden_categories(self):
+        source = notebook_source(
+            ROOT / "assets/project-template/Scripts/Scanpy/Notebooks/scanpy_workflow.ipynb"
+        )
+        self.assertIn("data_driven_panels[str(cluster)]", source)
+        self.assertNotIn("data_driven_panels[f'cluster_{cluster}']", source)
 
 
     def test_recorded_annotation_profile_review_round_trip(self):
