@@ -241,6 +241,8 @@ SCANPY_PLUMBING_KEYS = frozenset({
     "annotation_profile_signature", "sample_palette", "group_key",
     "dotplot_markers", "extra_candidate_panels", "cell_type_order", "cluster_to_cell_type",
     "epithelial_clusters", "epithelial_groups", "rare_clusters", "rare_groups",
+    "candidate_reference_annotation", "candidate_reference_cell_id_column",
+    "candidate_reference_cell_type_column",
     "candidate_min_score_margin", "candidate_top_markers_per_cluster",
 })
 """Sidecar keys excluded from the Scanpy analysis signature.

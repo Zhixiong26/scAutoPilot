@@ -68,7 +68,8 @@ PARAMETERS_KEYS = tuple(sorted(set(DEFAULTS) | {
     "annotation_profile_signature", "inputs", "sample_palette", "mitochondrial_prefixes",
     "ribosomal_prefixes", "dotplot_markers", "extra_candidate_panels", "cell_type_order",
     "cluster_to_cell_type", "epithelial_clusters", "epithelial_groups", "rare_clusters",
-    "rare_groups",
+    "rare_groups", "candidate_reference_annotation", "candidate_reference_cell_id_column",
+    "candidate_reference_cell_type_column",
 }))
 ITERATION_CHARSET = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
 
@@ -128,7 +129,7 @@ def load_annotation_profile(root: Path, annotation: Dict[str, Any]) -> Tuple[Dic
 
 def build_parameters(root: Path, cfg: Dict[str, Any], samples: List[Dict[str, Any]],
                      output_dir: Path, run_id: str, iteration_id: Optional[str] = None) -> Dict[str, Any]:
-    from _common import scanpy_analysis_signature
+    from _common import resolve_path, scanpy_analysis_signature
 
     analysis = nested(cfg, "analysis", "scanpy") or {}
     notebook_cfg = analysis.get("notebook") or {}
@@ -217,6 +218,12 @@ def build_parameters(root: Path, cfg: Dict[str, Any], samples: List[Dict[str, An
         "rare_clusters": [str(value) for value in (markers.get("rare_clusters") or [])],
         "rare_groups": [str(value) for value in (markers.get("rare_groups") or [])],
         "annotation_profile_signature": profile_signature,
+        # A supplied cell-level table is candidate evidence, not a reviewed Scanpy profile. The
+        # notebook may use it for a complete automatic proposal, but the run remains a candidate
+        # until a person records and approves the cluster mapping.
+        "candidate_reference_annotation": str(resolve_path(root, annotation.get("table")) or ""),
+        "candidate_reference_cell_id_column": str(annotation.get("cell_id_column") or "cell_id"),
+        "candidate_reference_cell_type_column": str(annotation.get("cell_type_column") or "cell_type"),
     }
     qc_keys = {"min_genes": ("qc", "min_genes"), "max_genes": ("qc", "max_genes"),
                "min_counts": ("qc", "min_counts"), "max_mt_percent": ("qc", "max_mt_percent"),

@@ -1898,6 +1898,17 @@ class SkillTests(unittest.TestCase):
         self.assertIn("data_driven_panels[str(cluster)]", source)
         self.assertNotIn("data_driven_panels[f'cluster_{cluster}']", source)
 
+    def test_candidate_annotation_is_complete_when_reference_is_available(self):
+        """Automatic candidates keep labels complete while preserving the review boundary."""
+        source = notebook_source(
+            ROOT / "assets/project-template/Scripts/Scanpy/Notebooks/scanpy_workflow.ipynb"
+        )
+        self.assertIn("candidate_auto_annotated_requires_review", source)
+        self.assertIn("reference_purity", source)
+        self.assertIn("Candidate reference annotation does not cover all analysed cells", source)
+        self.assertIn("proposal = top_label", source)
+        self.assertNotIn("proposal = top_label if status == 'proposed' else 'Unassigned'", source)
+
 
     def test_recorded_annotation_profile_review_round_trip(self):
         """The documented review loop has to be runnable: worksheet, edit, record, then load."""

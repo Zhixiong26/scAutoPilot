@@ -156,8 +156,8 @@ Notebook 把基础 QC 判定写入 `obs['pass_basic_qc']`，记录各 cohort 过
   将 Leiden cluster 映射到 `obs['cell_type']`，同一一级 cell type 可以合并多个 Leiden cluster，但原 cluster 身份仍保留。
 - The formal mapping is allowed only for `baseline` runs whose actual cluster set matches exactly; a candidate does not inherit the formal labels automatically, even if it happens to produce the same numeric cluster IDs.
   正式映射只允许用于 `baseline` 且实际 cluster 集合完整匹配的情况；candidate 即使恰好得到相同数字编号，也不会自动继承正式标签。
-- A candidate derives top1, top2, the score margin and a proposed cell type from the per-cluster marker z-scores; populations below `CANDIDATE_MIN_SCORE_MARGIN=0.20` are labelled `Unassigned`.
-  candidate 根据逐 cluster marker z-score 生成 top1、top2、score margin 和候选 cell type；低于 `CANDIDATE_MIN_SCORE_MARGIN=0.20` 的群标为 `Unassigned`。
+- A candidate must carry a complete automatic proposal. An exact cell-level reference takes priority and records cluster purity/disagreements; marker-panel scoring otherwise keeps the top label and marks a small margin as `proposed_low_confidence` instead of `Unassigned`.
+  candidate 必须携带完整自动提议。精确匹配的逐细胞参考表优先，并记录 cluster 纯度与分歧；否则 marker-panel 评分保留 top1 标签，低间隔标为 `proposed_low_confidence`，而不是 `Unassigned`。
 - A candidate also saves `tables/candidate_annotation_audit.tsv`, the cluster QC and the cohort fractions; the label column is `candidate_cell_type` and the status is fixed to `candidate_requires_review`.
   candidate 同时保存 `tables/candidate_annotation_audit.tsv`、cluster QC 和 cohort fractions，标签列名为 `candidate_cell_type`，状态固定为 `candidate_requires_review`。
 
@@ -239,9 +239,9 @@ A historical baseline can only be used to detect differences; it is not a substi
 
 ### 4. Annotate every cluster / 注释每个 cluster
 
-A candidate run that still reads `Unassigned` has produced the evidence, not the annotation. Stop there only in order to annotate — never in order to hand the clusters to someone else. Derive each cluster's identity in this same pass.
+A candidate run that still reads `Unassigned` has produced evidence, not a deliverable. Complete the automatic proposal in the same pass and give the user labels to audit rather than clusters to annotate.
 
-candidate 运行结束时若仍为 `Unassigned`，说明它产出的是证据而非注释。在此停留只为完成注释，不是把 cluster 交给他人：本轮就要确定每个 cluster 的身份。
+candidate 运行结束时若仍为 `Unassigned`，说明它只产出了证据，还不是可交付结果。同一 pass 必须补全自动候选，让用户审核标签，而不是让用户从头注释 cluster。
 
 - Read `tables/candidate_annotation_audit.tsv` together with the marker figures. The table carries each cluster's size, `top1`/`top2`, score margin and Top10 ranked markers.
   结合 marker 图阅读 `tables/candidate_annotation_audit.tsv`：其中含逐 cluster 的细胞数、`top1`/`top2`、score margin 和 Top10 ranked marker。

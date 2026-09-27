@@ -77,7 +77,7 @@ New entries go at the top of this section, using the template in "新一轮记�
 - 执行证据 / Execution evidence：完整副本保存为 `Results/Scanpy/<run-id>/scanpy_workflow_executed.ipynb`；canonical Notebook 验证后再次清除输出，避免提交内嵌图和 kernel 状态。
 - 结果身份 / Result identity：manifest 写入 `run_kind=baseline`、`iteration_id=null`、`annotation_status=reviewed`。
 - candidate smoke test：使用相同分析参数但强制进入 candidate 分支，独立写入 `<独立候选目录 / independent candidate directory>`（示例 / example: `/tmp/<candidate_smoke>/iterations/same_params_smoke/`）。
-- candidate 结果 / candidate result：`<N>` 个 cluster 得到 marker-score proposal（示例 / example: 17）；cluster `<id>` 因 `<top1>/<top2>` top1-top2 margin 仅 `<margin>`（示例 / example: cluster 13, Mast/T, 0.058），小于 0.20 阈值而保守标为 `Unassigned`。
+- candidate 结果 / candidate result：`<N>` 个 cluster 均得到自动 proposal；cluster `<id>` 的 top1/top2 margin 或参考纯度为 `<value>`，因此状态标为 `proposed_low_confidence`，候选标签仍保留供使用者审核。
 - 隔离验证 / Isolation check：candidate 使用 `candidate_cell_type`，没有正式 `cell_type` 列；H5AD/TSV/JSON 和 `<N>` 张图均使用候选文件名（示例 / example: 18），正式数据哈希未变化。
 - 结论 / Conclusion：baseline 保护、候选隔离、候选审计与低置信拒绝机制均工作正常。
   baseline protection, candidate isolation, candidate auditing and the low-confidence rejection mechanism all work as intended.
