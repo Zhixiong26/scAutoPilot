@@ -121,10 +121,29 @@ def _run(payload: Mapping[str, Any]) -> Dict[str, Any]:
     elif mode == "system_one_commercial":
         provider_name = str(settings.get("provider") or "")
         model = str(settings.get("model") or "")
-        if provider_name not in {"openai", "anthropic", "gemini"} or not model:
+        if provider_name not in {"openai", "anthropic", "gemini", "openai_compatible"} or not model:
             raise RuntimeError("commercial backend requires provider and model")
-        with SystemOneAdapterClient(provider=provider_name, model=model, **common) as client:
-            response = client.system_one(state=request["state_payload"], questions=questions)
+        if provider_name == "openai_compatible":
+            from system_one_adapter.providers.openai import OpenAIProvider
+
+            base_url = str(settings.get("base_url") or "").rstrip("/")
+            parsed = urlparse(base_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise RuntimeError("commercial openai_compatible backend requires an HTTP(S) base_url")
+            key_name = str(settings.get("api_key_env") or "")
+            api_key = os.environ.get(key_name) if key_name else None
+            if not api_key:
+                raise RuntimeError("commercial openai_compatible backend requires its configured API key environment variable")
+            provider = OpenAIProvider(model, base_url=base_url, api_key=api_key,
+                                      api=str(settings.get("api") or "chat_completions"))
+            try:
+                with SystemOneAdapterClient(model=provider, **common) as client:
+                    response = client.system_one(state=request["state_payload"], questions=questions)
+            finally:
+                provider.close()
+        else:
+            with SystemOneAdapterClient(provider=provider_name, model=model, **common) as client:
+                response = client.system_one(state=request["state_payload"], questions=questions)
     else:
         raise RuntimeError("unsupported backend mode: %s" % mode)
     result = response_to_payload(response, mode, settings)

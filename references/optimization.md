@@ -55,11 +55,43 @@ shared analysis environment.
 The backend records adapter version, token totals, latency, retry counts, and
 the complete adapter response including `llm_attempts` in `backend_audit.json`.
 Credentials are read from environment variables and are not written to audit
-files. `system_one_commercial` uses the same adapter with OpenAI, Anthropic, or
-Gemini. `typesafe_jev` is a separately named future backend; local adapter
-results must never be labelled as Jev. When the configured backend is absent or
+files. `system_one_commercial` uses the same adapter with OpenAI, Anthropic,
+Gemini, or a paid OpenAI-compatible endpoint. For the latter, set
+`provider: openai_compatible`, `base_url`, `model`, and `api_key_env`; the
+credential is read only from that environment variable and is never persisted.
+`typesafe_jev` is a separately named future backend; local adapter results must
+never be labelled as Jev. When the configured backend is absent or
 fails and fallback is allowed, the result explicitly says
 `uncalibrated_rule_fallback_v0`.
+
+## Optional multimodal visual sensor
+
+`scanpy_mvp.visual_review` controls a bounded visual-evidence branch. It is
+enabled by default with an explicit non-blocking fallback: when the API key or
+service is unavailable, the evidence state records `degraded` and never claims
+that a model call occurred. The reviewer collects at most four fixed PNG artifacts from the same
+candidate iteration: cell-type UMAP, Leiden UMAP, and one available candidate
+marker dotplot. Every file is recorded with its SHA-256, dimensions, and size.
+
+The `openai_compatible` backend sends those images to a separately configured
+vision-capable model. The shipped template targets DeepSeek's current
+`deepseek-flash` multimodal model at `https://api.deepseek.com`; its legacy
+`deepseek-v4-flash-vision-exp` name is not needed. Set `DEEPSEEK_API_KEY` in
+the execution environment and change the endpoint/model only when selecting a
+different OpenAI-compatible vision service. Credentials are read only from
+`api_key_env`. The model
+may report only the closed observation vocabulary: sample-specific islands,
+disconnected same-label regions, bridge patterns, extreme crowding, isolated
+outlier islands, and possible overfragmentation. It cannot score, accept,
+reject, or propose parameters.
+
+Each observation is checked against deterministic measurements from the same
+candidate H5AD. The result is `confirmed`, `refuted`, or `unverified`; bridge
+patterns deliberately remain unverified until a defensible numerical detector
+exists. The complete record is frozen as `visual_review.json`, while its
+observations, verification, and metrics enter `state.json` under `visual`.
+If the visual backend is optional and unavailable, the state says `degraded` or
+`unavailable`; if it is required, the round fails closed before publication.
 
 The immutable round is stored under
 `.workflow/optimization/<session-id>/round_NNN/` with state, questions,

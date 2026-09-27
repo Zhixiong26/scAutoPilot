@@ -24,18 +24,18 @@ RNA 输入支持标准 10x filtered matrix 目录、ZIP 和 10x H5。甲基化�
 ### 2. 安装
 
 ```bash
-git clone git@github.com:Zhixiong26/single-cell-multiomics-analysis.git \
-  "$HOME/single-cell-multiomics-analysis"
+git clone git@github.com:Zhixiong26/scAutoPilot.git \
+  "$HOME/scAutoPilot"
 
 mkdir -p "$HOME/.codex/skills"
-ln -s "$HOME/single-cell-multiomics-analysis" \
-  "$HOME/.codex/skills/single-cell-multiomics-analysis"
+ln -s "$HOME/scAutoPilot" \
+  "$HOME/.codex/skills/scautopilot"
 ```
 
 如果目标软链接已经存在，请先确认它指向的仓库，不要直接覆盖。安装后开启新的 Codex 会话；可通过以下提示词调用：
 
 ```text
-请使用 $single-cell-multiomics-analysis，为我提供的 10x RNA 和逐细胞 ALLC
+请使用 $scautopilot，为我提供的 10x RNA 和逐细胞 ALLC
 创建一个新项目。先生成 intake、执行完整 preflight 和 dry-run，不要立即提交正式任务。
 ```
 
@@ -182,7 +182,7 @@ analysis:
 输出目录必须不存在或为空：
 
 ```bash
-SKILL_ROOT="$HOME/single-cell-multiomics-analysis"
+SKILL_ROOT="$HOME/scAutoPilot"
 PYTHON=/path/to/python-3.9-or-newer
 PROJECT=/work/example_multiome
 
@@ -333,7 +333,7 @@ PYTHON_EXE=/path/to/python-3.9-or-newer bash tests/run_tests.sh
 
 /path/to/python-3.9-or-newer \
   "$HOME/.codex/skills/.system/skill-creator/scripts/quick_validate.py" \
-  "$HOME/single-cell-multiomics-analysis"
+  "$HOME/scAutoPilot"
 ```
 
 仓库测试覆盖 RNA-only、ALLC-only、配对多组学、环境 bootstrap、输入数据链接与下载校验、内置参考默认值、完成证据、路线闭包、常见 ALLC 命名、错误 checksum、Slurm 资源选择、主机角色判定与登录节点拒绝、以及 `local` 单机后端。
@@ -374,18 +374,18 @@ Raw FASTQ and BAM processing are out of scope. No genome, sample label, cell cou
 ### Install
 
 ```bash
-git clone git@github.com:Zhixiong26/single-cell-multiomics-analysis.git \
-  "$HOME/single-cell-multiomics-analysis"
+git clone git@github.com:Zhixiong26/scAutoPilot.git \
+  "$HOME/scAutoPilot"
 
 mkdir -p "$HOME/.codex/skills"
-ln -s "$HOME/single-cell-multiomics-analysis" \
-  "$HOME/.codex/skills/single-cell-multiomics-analysis"
+ln -s "$HOME/scAutoPilot" \
+  "$HOME/.codex/skills/scautopilot"
 ```
 
 Start a new Codex session and invoke it explicitly when desired:
 
 ```text
-Use $single-cell-multiomics-analysis to generate a project for my 10x RNA and
+Use $scautopilot to generate a project for my 10x RNA and
 per-cell ALLC inputs. Create the intake, run preflight and a dry-run, and do not
 submit production jobs yet.
 ```
@@ -397,7 +397,7 @@ Prepare an intake file using the schema shown above, then run:
 The intake's `data` block declares where the user's data already lives; generation links each entry into the project's own `Data/`, and the sample paths are then written relative to the project root (`Data/Matrix/...`). Nothing under `config/` points outside the project. `references.chrom_sizes` and `references.blacklist` may be omitted entirely: the skill ships public GRCh38 files under `Supplementary/` and fills in whichever key is blank for a human project with a methylation route — and says so in the generated `Report.md`. A project on another organism or genome keeps the preflight failure that names the reference it must declare, rather than silently inheriting the wrong coordinates.
 
 ```bash
-SKILL_ROOT="$HOME/single-cell-multiomics-analysis"
+SKILL_ROOT="$HOME/scAutoPilot"
 PYTHON=/path/to/python-3.9-or-newer
 PROJECT=/work/example_multiome
 

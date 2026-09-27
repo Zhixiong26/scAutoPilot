@@ -562,6 +562,7 @@ class SkillTests(unittest.TestCase):
             self.assertTrue((project / "environment-specs/analysis-core.yaml").is_file())
             self.assertTrue((project / "environment-specs/decision.yaml").is_file())
             self.assertTrue((project / "tools/system_one_adapter_runner.py").is_file())
+            self.assertTrue((project / "tools/visual_vlm_runner.py").is_file())
             environments = project / "config" / "environments.tsv"
             environments.write_text(
                 "stage\tpython\texecutable\tversion_command\trequired\n",

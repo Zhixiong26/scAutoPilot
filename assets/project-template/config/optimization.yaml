@@ -19,6 +19,33 @@
       "clustering_metrics": ["silhouette", "davies_bouldin", "celltype_asw", "ilisi", "batch_asw"],
       "umap_metrics": ["trustworthiness", "knn_preservation"]
     },
+    "visual_review": {
+      "enabled": true,
+      "required": false,
+      "fallback_on_error": true,
+      "max_cells": 20000,
+      "max_images": 4,
+      "max_image_bytes": 8388608,
+      "figure_ids": ["cell_type_umap", "leiden_umap", "annotation_marker_dotplot", "cluster_marker_dotplot"],
+      "thresholds": {
+        "sample_enrichment": 0.25,
+        "crowding_q01_ratio": 0.05,
+        "duplicate_fraction": 0.005,
+        "clusters_per_celltype": 2
+      },
+      "backend": {
+        "mode": "openai_compatible",
+        "python": null,
+        "base_url": "https://api.deepseek.com",
+        "model": "deepseek-flash",
+        "api_key_env": "DEEPSEEK_API_KEY",
+        "structured_outputs": false,
+        "image_detail": "low",
+        "max_output_tokens": 1600,
+        "request_timeout_seconds": 120,
+        "timeout_seconds": 180
+      }
+    },
     "decision_backend": {
       "mode": "system_one_local",
       "timeout_seconds": 180,
@@ -36,7 +63,10 @@
       "system_one_commercial": {
         "python": null,
         "provider": null,
+        "base_url": null,
         "model": null,
+        "api": "chat_completions",
+        "api_key_env": null,
         "structured_outputs": true,
         "normalize_probabilities": true,
         "n_retry_malformed_structure": 2

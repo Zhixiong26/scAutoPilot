@@ -1,9 +1,9 @@
 ---
-name: single-cell-multiomics-analysis
+name: scautopilot
 description: Generate, validate, schedule, monitor, and document portable single-cell RNA and DNA-methylation projects using Scanpy/Harmony, MethSCAn, ALLCools, and MethylVI. Use for configuration-driven project creation or execution from 10x RNA matrices and per-cell indexed ALLC data; do not use for raw FASTQ/BAM processing.
 ---
 
-# Single-cell multiomics analysis
+# scAutoPilot
 
 Create auditable projects from user-supplied data without assuming sample names, paths, cell counts, genome builds, environments, or cluster annotations. Use the bundled generator and templates instead of copying paths from a previous project.
 

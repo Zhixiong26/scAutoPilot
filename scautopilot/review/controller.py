@@ -17,6 +17,11 @@ from .backend import (
     system_one_adapter_backend,
 )
 from .primitives import Choice, Noul, Score
+from .visual import (
+    VisualEvidenceError, calculate_visual_metrics, collect_visual_figures,
+    verify_observations,
+)
+from .visual_backend import openai_compatible_visual_backend, visual_command_backend
 
 
 class ReviewError(RuntimeError):
@@ -190,6 +195,58 @@ def _step(grid: list, current: Any, direction: str) -> Optional[Any]:
     return grid[target] if 0 <= target < len(grid) else None
 
 
+def _visual_review(project: Path, candidate: Path, dataset: Mapping[str, Any],
+                   settings: Mapping[str, Any]) -> Dict[str, Any]:
+    """Run the optional VLM sensor and verify every observation numerically."""
+    figures = collect_visual_figures(candidate, settings)
+    metrics = calculate_visual_metrics(candidate, int(settings.get("max_cells", 20000)))
+    review = {"schema_version": 1, "status": "disabled", "figures": figures,
+              "observations": [], "verification": [], "metrics": metrics,
+              "backend_audit": {"requested_backend": "disabled",
+                                "effective_backend": "disabled"},
+              "degraded_reason": None}
+    if not bool(settings.get("enabled", False)):
+        return review
+    required = bool(settings.get("required", False))
+    fallback = bool(settings.get("fallback_on_error", True))
+    if not figures:
+        message = "no configured fixed-panel visual figures are available"
+        if required:
+            raise ReviewError(message)
+        review.update({"status": "unavailable", "degraded_reason": message,
+                       "backend_audit": {"requested_backend": "unknown",
+                                         "effective_backend": "not_run",
+                                         "degraded_reason": message}})
+        return review
+    backend = settings.get("backend") or {}
+    mode = str(backend.get("mode") or "")
+    timeout = float(backend.get("timeout_seconds", 180))
+    request = {"schema_version": 1, "dataset": dict(dataset), "figures": figures}
+    try:
+        if mode == "openai_compatible":
+            response = openai_compatible_visual_backend(project, backend, request, timeout)
+        elif mode == "command":
+            response = visual_command_backend(backend.get("command"), request, timeout)
+        else:
+            raise BackendError("unknown visual backend mode: %s" % (mode or "<empty>"))
+    except BackendError as exc:
+        if required or not fallback:
+            raise ReviewError(str(exc))
+        review.update({"status": "degraded", "degraded_reason": str(exc),
+                       "backend_audit": {"requested_backend": mode,
+                                         "effective_backend": "not_run",
+                                         "degraded_reason": str(exc)}})
+        return review
+    observations = response["observations"]
+    verification = verify_observations(observations, metrics, settings.get("thresholds") or {})
+    review.update({"status": "complete", "observations": observations,
+                   "verification": verification, "backend_audit": response.get("audit") or {},
+                   "degraded_reason": None})
+    review["backend_audit"].setdefault("requested_backend", mode)
+    review["backend_audit"].setdefault("effective_backend", mode)
+    return review
+
+
 def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, Any]:
     project = Path(project).resolve()
     summary_path = project / ".workflow" / "runs" / run_id / "run_summary.json"
@@ -235,6 +292,21 @@ def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, 
     round_root = session_root / ("round_%03d" % round_index)
     state_path = round_root / "state.json"
     questions_path = round_root / "questions.json"
+    visual_path = round_root / "visual_review.json"
+    try:
+        visual_review = _visual_review(project, candidate, benchmark["dataset"],
+                                       mvp.get("visual_review") or {})
+    except VisualEvidenceError as exc:
+        raise ReviewError(str(exc))
+    state["visual"] = {
+        "status": visual_review["status"],
+        "observations": visual_review["observations"],
+        "verification": visual_review["verification"],
+        "metrics": visual_review["metrics"],
+        "degraded_reason": visual_review["degraded_reason"],
+    }
+    state["evidence"]["visual_review"] = str(visual_path)
+    state["evidence"]["visual_figures"] = [item["path"] for item in visual_review["figures"]]
     request = _questions(state_path)
     request["state_payload"] = state
 
@@ -315,6 +387,7 @@ def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, 
     # Publish a round only after every calculation and policy check succeeds.
     # A backend/schema failure therefore cannot strand a half-written immutable
     # round that changes recovery semantics.
+    _write_immutable(visual_path, visual_review)
     _write_immutable(state_path, state)
     _write_immutable(questions_path, request)
     _write_immutable(round_root / "backend_audit.json", backend_audit)
