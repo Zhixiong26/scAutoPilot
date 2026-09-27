@@ -5,6 +5,7 @@
 目标仓库：`scAutoPilot`，来源版本：`single-cell-multiomics-analysis` 0.8.0。  
 性质：开发过程文档，不随 skill 分发，不进入使用者的运行时上下文；使用者的 token 成本由 §11.1 约束。  
 修订：第 3.2 版（2026-09-25）。修正运行时授权、缓存键、共用参数、状态机和验收统计上的冲突：以随代码发布的 capability policy 代替运行时读取 `plan.md`；依赖注册表覆盖全部有效输入而非只覆盖搜索轴；预算阻塞不再伪装成科学失败；protected waiver 必须新建会话修订；随机产物至少五次重复后才允许估计分布；M0 加入隔离真实小样本 smoke gate。  
+修订：第 3.3 版（2026-09-27）。增加 Scanpy/UMAP 自动审核 V0.1：四个逻辑搜索轴、两类 reviewer、五个类型化 judgment、上一轮差值状态、单轴离散控制器、硬停止条件与 Jev 命令适配器；规则降级不得冒充 Jev。
 修订：第 3.1 版（2026-09-25）。Reconciled the planned search space with the M0 source audit: capabilities the plan declared searchable but the code does not expose were moved to frozen/future scope — §6.1 `metric`, per-stage seeds and drawing parameters; §6.2 missing-value handling and effective-region fraction; §6.3 latent dimension, hidden size, layer count, learning rate and early stopping; §12 VMR branch boundaries. No capability was deleted by this revision: each was reclassified in place, with the audited reason recorded, and §4.1 now states how plan and registry compose rather than which one wins.  
 修订：第 3 版（2026-09-25）。相对第 2 版：拆分 Wrapper Equivalence 与 Scientific Stability 两个协议并加入噪声底实测（§13.1–13.3）、参数—产物依赖注册表升为 M0 核心交付物（§4.1）、约束漏斗与跨模态参考方向（§8）、分层搜索与回退（§9.1）、保真度单调不变量（§9.2）、Scientific Memory 适用范围与失效（§9.3）、新增 `ComparisonProtocol` 与 `ConstraintSpec`（§4）、M0 更名并前置（§14）。  
 修订：第 2 版（2026-09-24）。相对第 1 版增补包裹式适配边界（§1、§13.1）、数值一致性验收设施（§13.1）、上下文与 token 预算（§11.1）、失效粒度补全（§6.1）、搜索策略分阶段（§9.1）、跨模态多保真（§8）、M0 按需收敛（§12）、里程碑优先级（§14）与开放问题（§16）。
@@ -39,6 +40,23 @@ Evidence 是决策依据。确定性规则负责完整性、预算和科学约�
 - 跨模态指标必须声明**参考方向与独立性**，不用"与 RNA 一致"这类隐含真值的表述（§8）。
 
 首版不包含 GUI、任意模型生成代码执行、原始 FASTQ/BAM 处理、新的 Nextflow/Snakemake 后端、跨项目公共缓存或系统自行修改科学算法。scVI、ATAC、spatial 等仅保留插件扩展接口，不承诺首版实现。
+
+### 1.1 V0.1：Jev 驱动的 Scanpy/UMAP 自动优化 MVP
+
+V0.1 先实现可审计的窄闭环，不开放全部 Scanpy 参数。逻辑搜索空间固定为：
+
+| 逻辑轴 | 网格 | 作用 reviewer | 自动修改 |
+|---|---|---|---|
+| `n_pcs` | 20, 30, 40, 50, 60 | clustering + UMAP | 是；同时设置 PCA capacity 与 neighbors 使用的 PC 数 |
+| `n_neighbors` | 10, 15, 20, 30, 40, 50 | clustering + UMAP | 是 |
+| `resolution` | 0.4, 0.6, 0.8, 1.0, 1.2 | clustering | 是 |
+| `min_dist` | 0.1, 0.3, 0.5, 0.7, 0.9 | UMAP | 是 |
+
+`spread`、全局 random seed、Euclidean distance、batch correction 与 HVG 配置固定。每轮只允许一个逻辑轴向相邻网格移动一步。Clustering reviewer 读取 silhouette、Davies–Bouldin、cell-type ASW、iLISI、batch ASW；UMAP reviewer 读取 trustworthiness 与 KNN preservation。两组证据保持分栏，不压成单一总分。由本轮 Leiden 派生的自动候选注释属于循环证据：可以记录 cell-type ASW，但不能作为独立生物学验证。
+
+策略后端必须返回五个受约束判断：Accept `Noul`、parameter `Choice`、direction `Choice`、quality `Score`、escalate `Noul`。Jev 通过严格 JSON stdin/stdout command adapter 接入；没有配置或允许降级时，记录 `uncalibrated_rule_fallback_v0`，不得声称 Jev 已运行。控制器而非模型负责网格步长、单轴约束与停止：最多 20 轮、连续 5 轮无客观改善、达到 accept 阈值、需要 escalation、到达参数边界或选择 no-change。
+
+每轮保存 `state.json`、`questions.json`、`judgments.json`、`decision.json` 与带摘要的 `round_plan.json`。第二轮起 state 必须包含上一轮唯一参数变化及逐指标 delta；实际新 run 参数与上一轮冻结计划不一致时拒绝比较。Review 与 Apply 分开：review 只冻结下一轮，apply 校验 plan digest、配置漂移和单次使用，保存 `analysis_before/after.json` 后才更新配置；执行仍经过 quick/full validation、plan 与 scheduler submission。
 
 ## 2. 参考项目：采用设计，不引入整套框架
 
@@ -655,7 +673,7 @@ M5 的跨模态配对、泄漏控制与跨模态 Pareto 属交付底线；Jev �
 | 问题 | 现状 | 保守默认 |
 |---|---|---|
 | 噪声底与等价判据 | §13.1 要求先实测噪声底再定判据，实测尚未进行；此前版本的容差建议值已降级为"未测噪声底时的一次性粗筛" | 未完成噪声底测量前不进行 M2 等价放行；粗筛值不得用于放行 |
-| 参数族的层归属 | §9.1 按 Feature→Representation→Graph→Partition→Visualization 分层，但如 `n_pcs` 同时影响表示与图，跨层参数归属未定 | 跨层参数在下游层视为冻结、只在上游层搜索；确需跨层联合时走 §9.1 的联合扰动 |
+| 参数族的层归属 | V0.1 的 `n_pcs` 同时影响 PCA capacity 与 graph 使用的 PC 数 | 已解析为一个跨层逻辑轴：两个实际配置键原子地写入同一值，并按最上游 PCA 范围失效；不是两个独立搜索参数 |
 | 包裹式适配的边界个案 | §1 已定科学语义保持，§13.1 给出允许与禁止项，但仍有需个案判断的情形 | 任何触及默认参数值、计算步骤顺序或算法选择的改动都算改逻辑，单独决策 |
 | Slurm array 的实际合并率 | §10 允许同环境、同资源、同依赖层任务组成 array，但未量化三条路线能合并多少任务 | 合并率低时下调 array 投入，优先保证提交正确性 |
 | 未核验参考项（CellAgent xuanyuelingwu、CellMaster） | §2 标注本轮未完成独立源码核验 | 不构成任何交付前置，不作为 M5 的验收依据 |

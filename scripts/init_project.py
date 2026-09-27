@@ -28,6 +28,7 @@ TEMPLATE = SKILL_ROOT / "assets" / "project-template"
 RUNTIME_TOOLS = (
     "_common.py", "bootstrap_environments.py", "validate_project.py", "plan_workflow.py", "inspect_resources.py",
     "submit_workflow.py", "inspect_run.py", "update_report.py", "record_annotation_review.py", "link_data.py",
+    "review_scanpy_iteration.py", "apply_scanpy_round.py",
 )
 
 # Reference files the skill ships so a methylation project needs no reference
@@ -721,6 +722,10 @@ def main() -> int:
     tools_dir.mkdir(exist_ok=True)
     for name in RUNTIME_TOOLS:
         shutil.copy2(str(SKILL_ROOT / "scripts" / name), str(tools_dir / name))
+    shutil.copytree(
+        str(SKILL_ROOT / "scautopilot"), str(tools_dir / "scautopilot"), dirs_exist_ok=True,
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+    )
 
     project_id = str(intake.get("project_id", "")).strip()
     if not project_id:

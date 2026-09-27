@@ -229,8 +229,11 @@ parameters:
     read: ["Scripts/Scanpy/run_scanpy_notebook.py:229"]
     default: 50
     verified_against: template
-    searchable: false
-    note: n_comps 必须 >= n_pcs，代码未校验。
+    tests: ["tests/test_review.py::test_four_scanpy_mvp_parameters_are_authorized"]
+    searchable: true
+    note: >-
+      MVP 将此项与 scanpy.neighbors.n_pcs 绑定为一个逻辑 n_pcs 轴，控制器每轮同时写成
+      同一个值；它们不是两个可独立选择的搜索参数。
   scanpy.pca.svd_solver:
     stage: scanpy
     affects: [scanpy.pca]
@@ -270,7 +273,8 @@ parameters:
     read: ["Scripts/Scanpy/run_scanpy_notebook.py:230"]
     default: 30
     verified_against: template
-    searchable: false
+    tests: ["tests/test_review.py::test_four_scanpy_mvp_parameters_are_authorized"]
+    searchable: true
     note: 同一个 n_pcs 同时喂去批次前与去批次后两套图，无法分别搜索。
   scanpy.neighbors.n_neighbors:
     stage: scanpy
@@ -278,14 +282,16 @@ parameters:
     read: ["Scripts/Scanpy/run_scanpy_notebook.py:230"]
     default: 15
     verified_against: template
-    searchable: false
+    tests: ["tests/test_review.py::test_four_scanpy_mvp_parameters_are_authorized"]
+    searchable: true
   scanpy.leiden.resolution:
     stage: scanpy
     affects: [scanpy.cluster_labels]
     read: ["Scripts/Scanpy/run_scanpy_notebook.py:234"]
     default: 0.8
     verified_against: template
-    searchable: false
+    tests: ["tests/test_review.py::test_four_scanpy_mvp_parameters_are_authorized"]
+    searchable: true
     note: >-
       代码顺序支持计划的分层失效：UMAP 坐标先于 leiden 算出，leiden 无任何输入
       进入 UMAP 坐标。因此 cluster 改变在语义上不需要重算坐标——但当前执行器每次
@@ -296,7 +302,8 @@ parameters:
     read: ["Scripts/Scanpy/run_scanpy_notebook.py:233"]
     default: 0.5
     verified_against: template
-    searchable: false
+    tests: ["tests/test_review.py::test_four_scanpy_mvp_parameters_are_authorized"]
+    searchable: true
     note: 同一参数同时作用于去批次前与去批次后两套坐标。
   scanpy.umap.spread:
     stage: scanpy

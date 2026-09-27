@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "scanpy_mvp": {
+    "parameter_grids": {
+      "n_pcs": [20, 30, 40, 50, 60],
+      "n_neighbors": [10, 15, 20, 30, 40, 50],
+      "resolution": [0.4, 0.6, 0.8, 1.0, 1.2],
+      "min_dist": [0.1, 0.3, 0.5, 0.7, 0.9]
+    },
+    "fixed": {
+      "metric": "euclidean",
+      "spread": 1.0,
+      "random_state_source": "analysis.scanpy.seed",
+      "batch_correction": "configured_not_searched",
+      "hvg": "configured_not_searched"
+    },
+    "benchmark": {
+      "max_cells": 20000,
+      "clustering_metrics": ["silhouette", "davies_bouldin", "celltype_asw", "ilisi", "batch_asw"],
+      "umap_metrics": ["trustworthiness", "knn_preservation"]
+    },
+    "jev": {
+      "command": null,
+      "timeout_seconds": 120,
+      "fallback_on_error": true,
+      "accept_threshold": 0.8,
+      "escalate_threshold": 0.8
+    },
+    "stopping": {
+      "max_iterations": 20,
+      "max_no_improvement": 5,
+      "metric_epsilon": 0.001
+    }
+  }
+}

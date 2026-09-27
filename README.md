@@ -322,6 +322,10 @@ Scanpy 给出的 cell type 是**候选**；依赖 cell type 的 DMR 路线只有
 
 **注释在产出它的那一轮自动完成，不停在 `Unassigned`。** candidate 优先按精确 cell ID 使用项目声明的逐细胞参考注释，输出完整着色的候选 UMAP，并逐 cluster 记录多数标签、纯度、竞争标签和本轮 marker；没有完整参考表时，agent 根据本轮 marker、QC、样本构成和必要的 marker 查证自动提出每个 cluster 的最佳标签。低置信候选仍保留生物学标签，同时显式记录置信度和备选身份。用户审核或修正后，才用上面的工具记录 profile 并以 `baseline` 重跑；未经审核的自动标签不得冒充正式结果或进入 cell-type DMR。详见 [Scanpy 与 Harmony](references/scanpy.md)。
 
+### 9.1 Scanpy/UMAP 自动审核迭代 MVP
+
+首版只搜索 `n_pcs`、`n_neighbors`、Leiden `resolution` 和 UMAP `min_dist`，每轮只移动一个离散步长。它分别计算 embedding 与 clustering benchmark，以五个类型化判断生成不可变 round plan；随后由独立工具检查摘要和配置漂移后才把下一候选写入 `analysis.yaml`。真实 Jev 通过 `config/optimization.yaml` 中的命令适配器接入；未配置时结果明确标记为未校准规则 fallback，不声称 Jev 已运行。完整状态、指标、停止条件和命令见 [自动 Scanpy 审核](references/optimization.md)。
+
 ### 10. 测试
 
 ```bash
@@ -342,6 +346,7 @@ PYTHON_EXE=/path/to/python-3.9-or-newer bash tests/run_tests.sh
 - [MethSCAn 路线](references/methscan.md)
 - [ALLCools 和 MethylVI 路线](references/methylvi.md)
 - [调度与执行](references/execution.md)
+- [自动 Scanpy 审核与迭代](references/optimization.md)
 - [失败恢复](references/troubleshooting.md)
 - [文档与运行证据](references/documentation.md)
 - [模板维护与迁移清单](references/template-maintenance.md)、[迁移记录](references/migration-inventory.tsv)

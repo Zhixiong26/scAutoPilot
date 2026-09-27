@@ -488,8 +488,17 @@ class RealRegistryTests(unittest.TestCase):
             self.registry.assert_mutable(["scanpy.qc.min_genes"])
         self.assertIn("closed", str(caught.exception))
 
-    def test_no_real_axis_opens_before_m2_behavior_coverage(self):
-        self.assertFalse([entry.parameter_id for entry in self.registry.parameters.values() if entry.searchable])
+    def test_only_the_scanpy_mvp_axes_are_open_after_behavior_coverage(self):
+        self.assertEqual(
+            {entry.parameter_id for entry in self.registry.parameters.values() if entry.searchable},
+            {
+                "scanpy.pca.n_comps",
+                "scanpy.neighbors.n_pcs",
+                "scanpy.neighbors.n_neighbors",
+                "scanpy.leiden.resolution",
+                "scanpy.umap.min_dist",
+            },
+        )
 
     def test_coupled_parameters_are_recorded_as_coupled(self):
         """One canonical min_cells parameter invalidates both consumers."""
