@@ -7,6 +7,8 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
+import subprocess
 from pathlib import Path
 
 
@@ -17,9 +19,12 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from apply_scanpy_round import ApplyError, apply  # noqa: E402
 from scautopilot.policy import CapabilityPolicy  # noqa: E402
 from scautopilot.provenance import ParameterRegistry  # noqa: E402
-from scautopilot.review.backend import BackendError, rule_fallback, validate_judgments  # noqa: E402
+from scautopilot.review.backend import (  # noqa: E402
+    BackendError, rule_fallback, system_one_adapter_backend, validate_judgments,
+)
 from scautopilot.review.controller import PARAMETER_IDS  # noqa: E402
 from scautopilot.review.primitives import Choice, Noul, PrimitiveError, Score  # noqa: E402
+from system_one_adapter_runner import response_to_payload  # noqa: E402
 
 
 class PrimitiveTests(unittest.TestCase):
@@ -36,6 +41,15 @@ class PrimitiveTests(unittest.TestCase):
         with self.assertRaises(BackendError):
             validate_judgments({"accept_probability": 0.5, "python": "scanpy()"}, "test")
 
+    def test_system_one_timeout_becomes_a_fallback_eligible_backend_error(self):
+        settings = {"python": sys.executable, "base_url": "http://127.0.0.1:8000/v1",
+                    "model": "local-test"}
+        with mock.patch("scautopilot.review.backend.subprocess.run",
+                        side_effect=subprocess.TimeoutExpired("runner", 1)):
+            with self.assertRaises(BackendError) as caught:
+                system_one_adapter_backend(ROOT, "system_one_local", settings, {}, timeout=1)
+        self.assertIn("could not complete", str(caught.exception))
+
 
 class SearchSpaceTests(unittest.TestCase):
     def test_four_scanpy_mvp_parameters_are_authorized(self):
@@ -50,6 +64,10 @@ class SearchSpaceTests(unittest.TestCase):
         self.assertEqual(grids["n_neighbors"], [10, 15, 20, 30, 40, 50])
         self.assertEqual(grids["resolution"], [0.4, 0.6, 0.8, 1.0, 1.2])
         self.assertEqual(grids["min_dist"], [0.1, 0.3, 0.5, 0.7, 0.9])
+        backend = optimization["scanpy_mvp"]["decision_backend"]
+        self.assertEqual(backend["mode"], "system_one_local")
+        self.assertEqual(backend["system_one_local"]["api"], "chat_completions")
+        self.assertFalse(backend["system_one_local"]["structured_outputs"])
 
     def test_fallback_is_explicitly_not_jev(self):
         state = {"embedding": {"trustworthiness": 0.5, "knn_preservation": 0.5},
@@ -59,6 +77,38 @@ class SearchSpaceTests(unittest.TestCase):
         result = rule_fallback(state)
         self.assertEqual(result["backend"], "uncalibrated_rule_fallback_v0")
         self.assertNotEqual(result["backend"], "jev")
+
+    def test_official_adapter_response_is_mapped_and_audited(self):
+        class FakeResponse:
+            def model_dump(self, mode=None):
+                self.mode = mode
+                return {
+                    "answers": {
+                        "accept": {"noul": 0.8},
+                        "parameter": {"probabilities": {
+                            "n_pcs": 0.1, "n_neighbors": 0.1, "resolution": 0.6,
+                            "min_dist": 0.1, "none": 0.05, "escalate": 0.05}},
+                        "direction": {"probabilities": {
+                            "increase": 0.7, "decrease": 0.2, "keep": 0.1}},
+                        "quality": {"probabilities": {
+                            "0": 0.0, "1": 0.1, "2": 0.2, "3": 0.6, "4": 0.1}},
+                        "escalate": {"noul": 0.05},
+                    },
+                    "usage": {"input_tokens_total": 100, "output_tokens_total": 20,
+                              "latency": 0.5, "n_retries": 0,
+                              "n_retries_malformed_structure": 0},
+                    "debug": {"llm_attempts": [{"model": "local-test"}]},
+                }
+
+        result = response_to_payload(FakeResponse(), "system_one_local",
+                                     {"model": "local-test", "api_key": "secret"})
+        validated = validate_judgments(result["judgments"], "system_one_local")
+        self.assertEqual(validated["backend"], "system_one_local")
+        self.assertEqual(validated["parameter"]["resolution"], 0.6)
+        self.assertEqual(validated["quality"]["good"], 0.6)
+        self.assertEqual(result["audit"]["usage"]["input_tokens_total"], 100)
+        self.assertEqual(len(result["audit"]["response"]["debug"]["llm_attempts"]), 1)
+        self.assertNotIn("api_key", result["audit"]["settings"])
 
 
 class ApplyTests(unittest.TestCase):

@@ -2,13 +2,14 @@
 
 Environment handling has two phases. First inspect declared paths and discover compatible Conda prefixes without changing them. Then create only the unresolved profiles as isolated environments.
 
-The generated project carries versioned specs for three profiles:
+The generated project carries versioned specs for four profiles:
 
 | Profile | Stages | Verification |
 |---|---|---|
 | `analysis_core` | orchestrator, Scanpy, ALLCools | imports Scanpy, ALLCools, Harmony, Scrublet, Leiden and YAML |
 | `methscan` | MethSCAn VMR/DMR | runs `methscan --version` |
 | `methylvi` | MethylVI training and plotting | imports `scvi.external.METHYLVI`, PyTorch, Scanpy and MuData |
+| `decision` | System One local/commercial decision backend | imports the pinned official `system-one-adapter`; Python >=3.10 |
 
 Run a read-only plan first:
 
@@ -25,7 +26,7 @@ If profiles remain unresolved, create them and update `config/environments.tsv`:
   --execute
 ```
 
-The default prefixes are `PROJECT/.environments/analysis-core`, `methscan`, and `methylvi`, with a writable package cache under the same root. Use `--prefix-root /new/writable/location` when project storage is unsuitable. `mamba` is preferred when present; otherwise `conda` is used. A specific manager may be passed with `--manager`.
+The default prefixes are `PROJECT/.environments/analysis-core`, `methscan`, `methylvi`, and—when a System One adapter backend is selected—`decision`, with a writable package cache under the same root. Use `--prefix-root /new/writable/location` when project storage is unsuitable. `mamba` is preferred when present; otherwise `conda` is used. A specific manager may be passed with `--manager`.
 
 `Scripts/Environment/01_discover_environments.sh` prints a read-only TSV inventory of active tools and Conda prefixes. It searches the conventional `$HOME/miniconda3/envs` and `$HOME/miniforge3/envs` locations — portable guesses, not site assumptions — plus every root in the colon-separated `SCMO_ENV_ROOTS` and in `CONDA_ENVS_PATH`. A prefix outside those locations is found only if it is named there.
 

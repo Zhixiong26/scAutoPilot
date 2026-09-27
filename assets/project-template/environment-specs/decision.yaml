@@ -1,0 +1,9 @@
+name: scautopilot-decision
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - system-one-adapter[openai,anthropic,gemini]==0.2.1

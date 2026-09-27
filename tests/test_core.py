@@ -560,6 +560,8 @@ class SkillTests(unittest.TestCase):
             project = self.generate(Path(temp), "allc")
             self.assertTrue((project / "tools/bootstrap_environments.py").is_file())
             self.assertTrue((project / "environment-specs/analysis-core.yaml").is_file())
+            self.assertTrue((project / "environment-specs/decision.yaml").is_file())
+            self.assertTrue((project / "tools/system_one_adapter_runner.py").is_file())
             environments = project / "config" / "environments.tsv"
             environments.write_text(
                 "stage\tpython\texecutable\tversion_command\trequired\n",
@@ -567,7 +569,8 @@ class SkillTests(unittest.TestCase):
             )
             result = bootstrap(project, execute=False, discover=False)
             self.assertEqual(result["status"], "planned")
-            self.assertEqual(result["required_profiles"], ["analysis_core", "methscan", "methylvi"])
+            self.assertEqual(result["required_profiles"],
+                             ["analysis_core", "methscan", "methylvi", "decision"])
             self.assertTrue(all(item["action"] == "create" for item in result["actions"]))
             self.assertTrue(all("/.environments/" in item["prefix"] for item in result["actions"]))
 
@@ -652,9 +655,9 @@ class SkillTests(unittest.TestCase):
                     mock.patch.object(environment_bootstrap.subprocess, "check_call") as create:
                 result = bootstrap(project, execute=True, discover=False)
             self.assertEqual(result["status"], "complete")
-            self.assertEqual(create.call_count, 3)
+            self.assertEqual(create.call_count, 4)
             rows = environments.read_text(encoding="utf-8")
-            for stage in ("orchestrator", "scanpy_allcools", "methscan", "methylvi"):
+            for stage in ("orchestrator", "scanpy_allcools", "methscan", "methylvi", "decision"):
                 self.assertIn(stage, rows)
             self.assertTrue((project / ".workflow/environment-bootstrap/result.json").is_file())
             self.assertTrue((project / "Scripts/Environment/Report.md").is_file())

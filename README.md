@@ -324,7 +324,7 @@ Scanpy 给出的 cell type 是**候选**；依赖 cell type 的 DMR 路线只有
 
 ### 9.1 Scanpy/UMAP 自动审核迭代 MVP
 
-首版只搜索 `n_pcs`、`n_neighbors`、Leiden `resolution` 和 UMAP `min_dist`，每轮只移动一个离散步长。它分别计算 embedding 与 clustering benchmark，以五个类型化判断生成不可变 round plan；随后由独立工具检查摘要和配置漂移后才把下一候选写入 `analysis.yaml`。真实 Jev 通过 `config/optimization.yaml` 中的命令适配器接入；未配置时结果明确标记为未校准规则 fallback，不声称 Jev 已运行。完整状态、指标、停止条件和命令见 [自动 Scanpy 审核](references/optimization.md)。
+首版只搜索 `n_pcs`、`n_neighbors`、Leiden `resolution` 和 UMAP `min_dist`，每轮只移动一个离散步长。它分别计算 embedding 与 clustering benchmark，以五个类型化判断生成不可变 round plan；随后由独立工具检查摘要和配置漂移后才把下一候选写入 `analysis.yaml`。默认开发 backend 使用官方 `system-one-adapter` 连接本地 OpenAI-compatible 普通 chat model：固定走 Chat Completions，`structured_outputs=false`，由 prompt 要求 JSON 并在客户端验证。它不是 Jev；未来真实 Jev 使用独立的 `typesafe_jev` backend。未配置本地 endpoint 时结果明确标记为未校准规则 fallback。完整状态、指标、审计和命令见 [自动 Scanpy 审核](references/optimization.md)。
 
 ### 10. 测试
 

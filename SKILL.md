@@ -39,6 +39,7 @@ Create auditable projects from user-supplied data without assuming sample names,
 - Do not reduce below a task resource floor merely to fit a busy node. Do not pin a node unless data visibility or hardware requirements demand it.
 - Use a small isolated test when the template, environment, schema, or high-risk route changed; ordinary repeated runs still require full read-only preflight.
 - In the Scanpy MVP, change exactly one logical axis per round: `n_pcs`, `n_neighbors`, `resolution`, or `min_dist`. Keep `spread`, random seed, distance metric, batch correction, and HVG configuration fixed. A rule fallback must identify itself as a fallback; it is never evidence that Jev ran.
+- Treat `system_one_local` as an LLM simulation of the System One interface, not as Jev. Run its OpenAI-compatible model server as a separate compute-node service, use the isolated Python >=3.10 `decision` environment for the official adapter, and retain its usage/retry/attempt evidence.
 
 ## Packaged project code
 

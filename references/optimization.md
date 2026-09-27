@@ -33,15 +33,37 @@ independent biological validation. Only an approved independent annotation can.
 
 The backend must answer a fixed schema: Accept (`Noul`), next parameter
 (`Choice`), direction (`Choice`), quality (`Score`), and escalation (`Noul`).
-Configure an actual adapter command in `config/optimization.yaml` under
-`scanpy_mvp.jev.command`; it receives the question/state JSON on stdin and must
-return the strict response schema on stdout. With no command, or after an
-allowed adapter failure, the output explicitly says
-`uncalibrated_rule_fallback_v0`; never describe that run as Jev-driven.
+The default development backend is the official
+[`system-one-adapter`](https://github.com/typesafe-ai/system-one-adapter-python)
+with a local OpenAI-compatible chat endpoint. It is not Jev: it uses an ordinary
+LLM to implement the System One question interface.
+
+Set `scanpy_mvp.decision_backend.system_one_local.base_url` and `model` in
+`config/optimization.yaml`. The maintained configuration uses
+`api: chat_completions` and `structured_outputs: false`; the adapter therefore
+puts the output schema in the system prompt, parses the chat model's JSON text,
+validates it, and performs bounded corrective retries. Qwen, Llama, DeepSeek,
+or another ordinary chat model can be served by vLLM. The endpoint service runs
+as a separate GPU/Slurm workload; the reviewer only connects to it.
+
+`system-one-adapter==0.2.1` requires Python 3.10 or newer, so it lives in the
+isolated `decision` environment rather than the Python 3.9 Scanpy environment.
+Provision it with `tools/bootstrap_environments.py`; the reviewer resolves the
+`decision` row in `config/environments.tsv`. Never install it into a discovered
+shared analysis environment.
+
+The backend records adapter version, token totals, latency, retry counts, and
+the complete adapter response including `llm_attempts` in `backend_audit.json`.
+Credentials are read from environment variables and are not written to audit
+files. `system_one_commercial` uses the same adapter with OpenAI, Anthropic, or
+Gemini. `typesafe_jev` is a separately named future backend; local adapter
+results must never be labelled as Jev. When the configured backend is absent or
+fails and fallback is allowed, the result explicitly says
+`uncalibrated_rule_fallback_v0`.
 
 The immutable round is stored under
 `.workflow/optimization/<session-id>/round_NNN/` with state, questions,
-judgments, decision, and a signed frozen round plan. From round two onward the
+judgments, `backend_audit.json`, decision, and a signed frozen round plan. From round two onward the
 state includes the previous parameter change and per-metric deltas. A new run
 whose parameters do not match the preceding frozen plan is refused.
 

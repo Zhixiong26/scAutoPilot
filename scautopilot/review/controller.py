@@ -12,7 +12,10 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 from scautopilot.policy.capabilities import CapabilityPolicy
 from scautopilot.provenance.registry import ParameterRegistry
 
-from .backend import BackendError, DIRECTIONS, PARAMETERS, QUALITY, command_backend, rule_fallback
+from .backend import (
+    BackendError, DIRECTIONS, PARAMETERS, QUALITY, command_backend, rule_fallback,
+    system_one_adapter_backend,
+)
 from .primitives import Choice, Noul, Score
 
 
@@ -235,21 +238,39 @@ def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, 
     request = _questions(state_path)
     request["state_payload"] = state
 
-    jev = mvp.get("jev") or {}
+    decision_backend = mvp.get("decision_backend") or {}
+    legacy_jev = mvp.get("jev") or {}
+    threshold_policy = mvp.get("policy") or legacy_jev
+    mode = str(decision_backend.get("mode") or ("command" if legacy_jev.get("command") else "rule_fallback"))
+    fallback_on_error = bool(decision_backend.get("fallback_on_error",
+                                                  legacy_jev.get("fallback_on_error", True)))
+    timeout = float(decision_backend.get("timeout_seconds", legacy_jev.get("timeout_seconds", 180)))
     backend_error = None
-    if jev.get("command"):
-        try:
-            raw = command_backend(jev["command"], request, float(jev.get("timeout_seconds", 120)))
-        except BackendError as exc:
-            if not jev.get("fallback_on_error", False):
-                raise ReviewError(str(exc))
-            backend_error = str(exc)
-            raw = rule_fallback(state)
-    else:
+    backend_audit = {"requested_backend": mode}
+    try:
+        if mode in {"system_one_local", "system_one_commercial"}:
+            settings = decision_backend.get(mode) or {}
+            raw = system_one_adapter_backend(project, mode, settings, request, timeout)
+            backend_audit.update(raw.pop("audit", {}))
+        elif mode == "command":
+            command = decision_backend.get("command") or legacy_jev.get("command")
+            raw = command_backend(command, request, timeout)
+        elif mode == "rule_fallback":
+            raise BackendError("rule_fallback was explicitly selected")
+        elif mode == "typesafe_jev":
+            raise BackendError("typesafe_jev backend is reserved but not configured in V0.1")
+        else:
+            raise BackendError("unknown decision backend mode: %s" % mode)
+    except BackendError as exc:
+        if not fallback_on_error:
+            raise ReviewError(str(exc))
+        backend_error = str(exc)
         raw = rule_fallback(state)
-        backend_error = "no Jev command configured; used explicit uncalibrated fallback"
+        backend_audit.update({"effective_backend": raw["backend"], "degraded_reason": backend_error})
+    backend_audit.setdefault("effective_backend", raw["backend"])
     judgments = _typed_judgments(raw, state_path)
     judgments["degraded_reason"] = backend_error
+    judgments["backend_audit"] = str(round_root / "backend_audit.json")
 
     parameter = judgments["parameter"]["selected"]
     direction = judgments["direction"]["selected"]
@@ -262,9 +283,9 @@ def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, 
         reason = "max_iterations"
     elif no_improvement >= max_no_improvement:
         reason = "max_no_improvement"
-    elif accept >= float(jev.get("accept_threshold", 0.8)):
+    elif accept >= float(threshold_policy.get("accept_threshold", 0.8)):
         reason = "accepted"
-    elif escalate >= float(jev.get("escalate_threshold", 0.8)) or parameter == "escalate":
+    elif escalate >= float(threshold_policy.get("escalate_threshold", 0.8)) or parameter == "escalate":
         reason = "escalate"
     elif parameter == "none" or direction == "keep":
         reason = "no_change"
@@ -296,6 +317,7 @@ def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, 
     # round that changes recovery semantics.
     _write_immutable(state_path, state)
     _write_immutable(questions_path, request)
+    _write_immutable(round_root / "backend_audit.json", backend_audit)
     _write_immutable(round_root / "judgments.json", judgments)
     _write_immutable(round_root / "decision.json", decision)
     _write_immutable(round_root / "round_plan.json", plan)

@@ -1,10 +1,12 @@
-"""Strict Jev command adapter plus an explicit uncalibrated fallback backend."""
+"""Strict decision backends plus an explicit uncalibrated fallback."""
 
 from __future__ import annotations
 
 import json
 import shlex
 import subprocess
+import sys
+from pathlib import Path
 from typing import Any, Dict, Mapping, Sequence
 
 
@@ -35,12 +37,12 @@ def _distribution(value: Any, allowed: Sequence[str], name: str) -> Dict[str, fl
 
 def validate_judgments(value: Any, backend: str) -> Dict[str, Any]:
     if not isinstance(value, dict):
-        raise BackendError("Jev response must be a JSON object")
+        raise BackendError("decision backend response must be a JSON object")
     allowed = {"accept_probability", "parameter", "direction", "quality", "escalate_probability"}
     unknown = set(value) - allowed
     missing = allowed - set(value)
     if unknown or missing:
-        raise BackendError("Jev response schema mismatch; missing=%s unknown=%s" %
+        raise BackendError("decision backend response schema mismatch; missing=%s unknown=%s" %
                            (sorted(missing), sorted(unknown)))
     return {
         "backend": backend,
@@ -55,18 +57,86 @@ def validate_judgments(value: Any, backend: str) -> Dict[str, Any]:
 def command_backend(command: Any, request: Mapping[str, Any], timeout: float = 120.0) -> Dict[str, Any]:
     argv = shlex.split(command) if isinstance(command, str) else [str(item) for item in command]
     if not argv:
-        raise BackendError("Jev command is empty")
-    completed = subprocess.run(argv, input=json.dumps(request).encode("utf-8"),
-                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                               timeout=timeout, check=False)
+        raise BackendError("decision command is empty")
+    try:
+        completed = subprocess.run(argv, input=json.dumps(request).encode("utf-8"),
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   timeout=timeout, check=False)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise BackendError("decision command could not complete: %s" % exc)
     if completed.returncode:
-        raise BackendError("Jev command failed (%d): %s" %
+        raise BackendError("decision command failed (%d): %s" %
                            (completed.returncode, completed.stderr.decode("utf-8", "replace")[-2000:]))
     try:
         response = json.loads(completed.stdout.decode("utf-8"))
     except ValueError as exc:
-        raise BackendError("Jev command returned invalid JSON: %s" % exc)
-    return validate_judgments(response, "jev_command")
+        raise BackendError("decision command returned invalid JSON: %s" % exc)
+    return validate_judgments(response, "command_backend")
+
+
+def _decision_python(project: Path, settings: Mapping[str, Any]) -> str:
+    configured = str(settings.get("python") or "").strip()
+    if configured:
+        path = Path(configured).expanduser()
+        if not path.is_file():
+            raise BackendError("configured decision Python does not exist: %s" % path)
+        return str(path)
+    manifest = project / "config" / "environments.tsv"
+    if manifest.is_file():
+        import csv
+        with manifest.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle, delimiter="\t"):
+                if row.get("stage") == "decision" and row.get("python"):
+                    path = Path(row["python"]).expanduser()
+                    if not path.is_file():
+                        raise BackendError("decision environment Python does not exist: %s" % path)
+                    return str(path)
+    if sys.version_info >= (3, 10):
+        return sys.executable
+    raise BackendError("system-one-adapter requires Python >=3.10; provision the decision environment")
+
+
+def system_one_adapter_backend(
+    project: Path,
+    mode: str,
+    settings: Mapping[str, Any],
+    request: Mapping[str, Any],
+    timeout: float = 180.0,
+) -> Dict[str, Any]:
+    """Invoke the official adapter in its isolated Python >=3.10 environment."""
+    if mode not in {"system_one_local", "system_one_commercial"}:
+        raise BackendError("unsupported system-one-adapter mode: %s" % mode)
+    if mode == "system_one_local" and (not settings.get("base_url") or not settings.get("model")):
+        raise BackendError("system_one_local is selected but base_url/model is not configured")
+    if mode == "system_one_commercial" and (not settings.get("provider") or not settings.get("model")):
+        raise BackendError("system_one_commercial is selected but provider/model is not configured")
+    python = _decision_python(Path(project), settings)
+    runner = Path(project) / "tools" / "system_one_adapter_runner.py"
+    if not runner.is_file():
+        repository_runner = Path(__file__).resolve().parents[2] / "scripts" / "system_one_adapter_runner.py"
+        runner = repository_runner if repository_runner.is_file() else runner
+    if not runner.is_file():
+        raise BackendError("system-one-adapter runner is absent: %s" % runner)
+    payload = {"schema_version": 1, "mode": mode, "settings": dict(settings), "request": dict(request)}
+    try:
+        completed = subprocess.run(
+            [python, str(runner)], input=json.dumps(payload).encode("utf-8"),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise BackendError("system-one-adapter runner could not complete: %s" % exc)
+    if completed.returncode:
+        raise BackendError("system-one-adapter runner failed (%d): %s" %
+                           (completed.returncode, completed.stderr.decode("utf-8", "replace")[-4000:]))
+    try:
+        response = json.loads(completed.stdout.decode("utf-8"))
+    except ValueError as exc:
+        raise BackendError("system-one-adapter runner returned invalid JSON: %s" % exc)
+    if not isinstance(response, dict) or not isinstance(response.get("judgments"), dict):
+        raise BackendError("system-one-adapter runner response lacks judgments")
+    result = validate_judgments(response["judgments"], mode)
+    result["audit"] = response.get("audit") or {}
+    return result
 
 
 def _one_hot(options: Sequence[str], selected: str) -> Dict[str, float]:

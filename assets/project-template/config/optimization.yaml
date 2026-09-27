@@ -19,10 +19,30 @@
       "clustering_metrics": ["silhouette", "davies_bouldin", "celltype_asw", "ilisi", "batch_asw"],
       "umap_metrics": ["trustworthiness", "knn_preservation"]
     },
-    "jev": {
-      "command": null,
-      "timeout_seconds": 120,
+    "decision_backend": {
+      "mode": "system_one_local",
+      "timeout_seconds": 180,
       "fallback_on_error": true,
+      "system_one_local": {
+        "python": null,
+        "base_url": null,
+        "model": null,
+        "api": "chat_completions",
+        "api_key_env": "SCAUTOPILOT_LOCAL_LLM_API_KEY",
+        "structured_outputs": false,
+        "normalize_probabilities": true,
+        "n_retry_malformed_structure": 2
+      },
+      "system_one_commercial": {
+        "python": null,
+        "provider": null,
+        "model": null,
+        "structured_outputs": true,
+        "normalize_probabilities": true,
+        "n_retry_malformed_structure": 2
+      }
+    },
+    "policy": {
       "accept_threshold": 0.8,
       "escalate_threshold": 0.8
     },

@@ -28,7 +28,7 @@ TEMPLATE = SKILL_ROOT / "assets" / "project-template"
 RUNTIME_TOOLS = (
     "_common.py", "bootstrap_environments.py", "validate_project.py", "plan_workflow.py", "inspect_resources.py",
     "submit_workflow.py", "inspect_run.py", "update_report.py", "record_annotation_review.py", "link_data.py",
-    "review_scanpy_iteration.py", "apply_scanpy_round.py",
+    "review_scanpy_iteration.py", "apply_scanpy_round.py", "system_one_adapter_runner.py",
 )
 
 # Reference files the skill ships so a methylation project needs no reference

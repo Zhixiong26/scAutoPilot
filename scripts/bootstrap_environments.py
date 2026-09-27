@@ -21,7 +21,7 @@ from _common import (
 )
 
 
-PROFILE_ORDER = ("analysis_core", "methscan", "methylvi")
+PROFILE_ORDER = ("analysis_core", "methscan", "methylvi", "decision")
 PROFILES: Dict[str, Dict[str, Any]] = {
     "analysis_core": {
         "stages": ("orchestrator", "scanpy_allcools"),
@@ -50,6 +50,15 @@ PROFILES: Dict[str, Dict[str, Any]] = {
             "print('methylvi', scvi.__version__, torch.__version__, scanpy.__version__)",
         ],
     },
+    "decision": {
+        "stages": ("decision",),
+        "spec": "decision.yaml",
+        "executable": "bin/python",
+        "check": [
+            "bin/python", "-c",
+            "import system_one_adapter; print('decision', system_one_adapter.__version__)",
+        ],
+    },
 }
 ENV_COLUMNS = ("stage", "python", "executable", "version_command", "required")
 
@@ -61,6 +70,15 @@ def required_profiles(project: Path) -> List[str]:
     result = ["analysis_core"] if has_rna or has_allc else []
     if has_allc:
         result.extend(["methscan", "methylvi"])
+    optimization = project / "config" / "optimization.yaml"
+    if optimization.is_file():
+        try:
+            configured = json.loads(optimization.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            configured = {}
+        mode = (((configured.get("scanpy_mvp") or {}).get("decision_backend") or {}).get("mode"))
+        if mode in {"system_one_local", "system_one_commercial"}:
+            result.append("decision")
     return result
 
 

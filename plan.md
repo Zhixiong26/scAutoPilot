@@ -5,7 +5,7 @@
 目标仓库：`scAutoPilot`，来源版本：`single-cell-multiomics-analysis` 0.8.0。  
 性质：开发过程文档，不随 skill 分发，不进入使用者的运行时上下文；使用者的 token 成本由 §11.1 约束。  
 修订：第 3.2 版（2026-09-25）。修正运行时授权、缓存键、共用参数、状态机和验收统计上的冲突：以随代码发布的 capability policy 代替运行时读取 `plan.md`；依赖注册表覆盖全部有效输入而非只覆盖搜索轴；预算阻塞不再伪装成科学失败；protected waiver 必须新建会话修订；随机产物至少五次重复后才允许估计分布；M0 加入隔离真实小样本 smoke gate。  
-修订：第 3.3 版（2026-09-27）。增加 Scanpy/UMAP 自动审核 V0.1：四个逻辑搜索轴、两类 reviewer、五个类型化 judgment、上一轮差值状态、单轴离散控制器、硬停止条件与 Jev 命令适配器；规则降级不得冒充 Jev。
+修订：第 3.3 版（2026-09-27）。增加 Scanpy/UMAP 自动审核 V0.1：四个逻辑搜索轴、两类 reviewer、五个类型化 judgment、上一轮差值状态、单轴离散控制器和硬停止条件。开发 backend 使用官方 `system-one-adapter` 连接本地普通 chat model；真实 Jev 保留为独立 backend，二者不得混称。
 修订：第 3.1 版（2026-09-25）。Reconciled the planned search space with the M0 source audit: capabilities the plan declared searchable but the code does not expose were moved to frozen/future scope — §6.1 `metric`, per-stage seeds and drawing parameters; §6.2 missing-value handling and effective-region fraction; §6.3 latent dimension, hidden size, layer count, learning rate and early stopping; §12 VMR branch boundaries. No capability was deleted by this revision: each was reclassified in place, with the audited reason recorded, and §4.1 now states how plan and registry compose rather than which one wins.  
 修订：第 3 版（2026-09-25）。相对第 2 版：拆分 Wrapper Equivalence 与 Scientific Stability 两个协议并加入噪声底实测（§13.1–13.3）、参数—产物依赖注册表升为 M0 核心交付物（§4.1）、约束漏斗与跨模态参考方向（§8）、分层搜索与回退（§9.1）、保真度单调不变量（§9.2）、Scientific Memory 适用范围与失效（§9.3）、新增 `ComparisonProtocol` 与 `ConstraintSpec`（§4）、M0 更名并前置（§14）。  
 修订：第 2 版（2026-09-24）。相对第 1 版增补包裹式适配边界（§1、§13.1）、数值一致性验收设施（§13.1）、上下文与 token 预算（§11.1）、失效粒度补全（§6.1）、搜索策略分阶段（§9.1）、跨模态多保真（§8）、M0 按需收敛（§12）、里程碑优先级（§14）与开放问题（§16）。
@@ -41,7 +41,7 @@ Evidence 是决策依据。确定性规则负责完整性、预算和科学约�
 
 首版不包含 GUI、任意模型生成代码执行、原始 FASTQ/BAM 处理、新的 Nextflow/Snakemake 后端、跨项目公共缓存或系统自行修改科学算法。scVI、ATAC、spatial 等仅保留插件扩展接口，不承诺首版实现。
 
-### 1.1 V0.1：Jev 驱动的 Scanpy/UMAP 自动优化 MVP
+### 1.1 V0.1：System One 接口驱动的 Scanpy/UMAP 自动优化 MVP
 
 V0.1 先实现可审计的窄闭环，不开放全部 Scanpy 参数。逻辑搜索空间固定为：
 
@@ -54,9 +54,9 @@ V0.1 先实现可审计的窄闭环，不开放全部 Scanpy 参数。逻辑搜�
 
 `spread`、全局 random seed、Euclidean distance、batch correction 与 HVG 配置固定。每轮只允许一个逻辑轴向相邻网格移动一步。Clustering reviewer 读取 silhouette、Davies–Bouldin、cell-type ASW、iLISI、batch ASW；UMAP reviewer 读取 trustworthiness 与 KNN preservation。两组证据保持分栏，不压成单一总分。由本轮 Leiden 派生的自动候选注释属于循环证据：可以记录 cell-type ASW，但不能作为独立生物学验证。
 
-策略后端必须返回五个受约束判断：Accept `Noul`、parameter `Choice`、direction `Choice`、quality `Score`、escalate `Noul`。Jev 通过严格 JSON stdin/stdout command adapter 接入；没有配置或允许降级时，记录 `uncalibrated_rule_fallback_v0`，不得声称 Jev 已运行。控制器而非模型负责网格步长、单轴约束与停止：最多 20 轮、连续 5 轮无客观改善、达到 accept 阈值、需要 escalation、到达参数边界或选择 no-change。
+策略后端必须返回五个受约束判断：Accept `Noul`、parameter `Choice`、direction `Choice`、quality `Score`、escalate `Noul`。开发与普通 LLM benchmark 使用官方 `system-one-adapter==0.2.1`：`system_one_local` 连接 vLLM 等 OpenAI-compatible endpoint，固定 Chat Completions；`structured_outputs=false` 时由 adapter 把 schema 写入 prompt、验证 chat model 返回的 JSON，并有限重试。它是 System One 接口的 LLM 替代实现，不是 Jev。商业 LLM 使用 `system_one_commercial`；未来 TypeSafe API 使用独立 `typesafe_jev` backend。没有配置、调用失败或允许降级时记录 `uncalibrated_rule_fallback_v0`。控制器而非模型负责网格步长、单轴约束与停止：最多 20 轮、连续 5 轮无客观改善、达到 accept 阈值、需要 escalation、到达参数边界或选择 no-change。
 
-每轮保存 `state.json`、`questions.json`、`judgments.json`、`decision.json` 与带摘要的 `round_plan.json`。第二轮起 state 必须包含上一轮唯一参数变化及逐指标 delta；实际新 run 参数与上一轮冻结计划不一致时拒绝比较。Review 与 Apply 分开：review 只冻结下一轮，apply 校验 plan digest、配置漂移和单次使用，保存 `analysis_before/after.json` 后才更新配置；执行仍经过 quick/full validation、plan 与 scheduler submission。
+每轮保存 `state.json`、`questions.json`、`judgments.json`、`backend_audit.json`、`decision.json` 与带摘要的 `round_plan.json`。adapter 审计保存版本、token、latency、重试和完整 `llm_attempts`，但不保存凭证。由于官方 adapter 需要 Python ≥3.10，单独使用 `decision` 环境，不升级 Python 3.9 的 Scanpy 科学环境；本地模型服务作为 GPU/Slurm 服务独立运行。第二轮起 state 必须包含上一轮唯一参数变化及逐指标 delta；实际新 run 参数与上一轮冻结计划不一致时拒绝比较。Review 与 Apply 分开：review 只冻结下一轮，apply 校验 plan digest、配置漂移和单次使用，保存 `analysis_before/after.json` 后才更新配置；执行仍经过 quick/full validation、plan 与 scheduler submission。
 
 ## 2. 参考项目：采用设计，不引入整套框架
 
