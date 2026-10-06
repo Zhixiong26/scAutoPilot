@@ -24,6 +24,7 @@
     "Focus dotplots are skipped unless their panel and cluster lists are configured.",
     "The save cell writes notebook_artifacts.json so the harness records evidence without re-deriving filenames.",
     "Cell 1 selects the inline matplotlib backend so the executed notebook carries the figures of the run; the runner executes headlessly.",
-    "Cell sources are re-chunked to one JSON entry per line; the rendered code text is unchanged."
+    "Cell sources are re-chunked to one JSON entry per line; the rendered code text is unchanged.",
+    "Template 0.8.1 carries one more cell than earlier revisions: `figure-standard` defines the embedding-panel helpers, and the five figure cells use them. Every embedding panel is 4.0 in square and continuous colour bars are drawn in a row of their own below the panels. The shipped example (never executed by the DAG) keeps its original figure geometry, so its figures are not a counterexample to this standard."
   ]
 }

@@ -93,6 +93,12 @@ observations, verification, and metrics enter `state.json` under `visual`.
 If the visual backend is optional and unavailable, the state says `degraded` or
 `unavailable`; if it is required, the round fails closed before publication.
 
+Every artifact the sensor receives is drawn under the embedding-panel standard
+in `references/scanpy.md`: the same 4.0 in square panel and the same colouring
+convention in every round. Recorded dimensions are therefore comparable across
+rounds, and a reported shape is never an artefact of a point cloud stretched
+into a non-square axes box.
+
 The immutable round is stored under
 `.workflow/optimization/<session-id>/round_NNN/` with state, questions,
 judgments, `backend_audit.json`, decision, and a signed frozen round plan. From round two onward the
