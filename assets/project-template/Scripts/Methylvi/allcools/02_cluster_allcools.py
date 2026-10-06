@@ -7,8 +7,12 @@ import hashlib
 import importlib
 import json
 import os
+import sys
 import warnings
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Common"))
+from embedding_plot import save_embedding
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
@@ -245,7 +249,7 @@ def main() -> None:
             color=["L1", "L1_proba", "cohort", "manual_celltype"],
             show=False, wspace=0.35,
         )
-        plt.savefig(args.output.parent / f"allcools_{basis}.png", dpi=300, bbox_inches="tight")
+        save_embedding(plt.gcf(), args.output.parent / f"allcools_{basis}.png")
         plt.close("all")
     summary = {
         "initial_shape": initial_shape, "filtered_shape": filtered_shape,

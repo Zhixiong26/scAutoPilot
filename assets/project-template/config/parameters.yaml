@@ -596,14 +596,14 @@ frozen:
   scanpy.visual.color:
     同 symbol：颜色（除 sample_palette）是硬编码字面量。
   scanpy.visual.legend:
-    同 symbol：legend_loc 是硬编码字面量。图例位置与嵌入面板几何一并由 notebook 的
-    figure-standard 单元规定（面板 4.0 in 见方、连续 colorbar 在面板行下方单独成排），
+    同 symbol：图例与嵌入图最终布局由 Scripts/Common/embedding_plot.py 的
+    save_embedding 统一为 8 in 方形画布、右侧单列图例与竖直 colorbar，
     改这条几何不产生任何数值产物，registry 审计基准不变。
   scanpy.visual.size:
-    同 symbol：图件尺寸与点大小是硬编码字面量。嵌入面板尺寸固定为 4.0 in 见方
-    （notebook figure-standard 单元），同样是字面量而非可搜索键。
+    同 symbol：图件尺寸与点大小不是可搜索键。共享 exporter 固定 8 in 方形画布、
+    4 in 单面板；对比图为较小正方面板。数值坐标和分析参数不受绘图规格改变。
   methscan.scanpy.impute_iterations: >-
-    计划 §6.2 声明"缺失值处理"可搜索。04_vmr_scanpy.py:29 硬编码 10，无环境变量、
+    计划 §6.2 声明"缺失值处理"可搜索。04_vmr_scanpy.py 的 parse_args 中默认 10，无环境变量、
     无 sbatch 传递、无 adapter 注入。
   methscan.scanpy.min_region_cell_fraction: >-
     参数存在（00_methscan_config.sh:49）但 task_adapter 未注入，托管 DAG 路径下

@@ -8,6 +8,9 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Common"))
+from embedding_plot import save_embedding
+
 import anndata as ad
 import numpy as np
 import pandas as pd
@@ -132,7 +135,7 @@ def main() -> None:
                 title=f"MethylVI supervised UMAP — {color_key} (target_weight={weight:g})",
             )
             figure_path = figure_dir / f"methylvi_supervised_umap_{color_key}.png"
-            figure.savefig(figure_path, dpi=200, bbox_inches="tight")
+            save_embedding(figure, figure_path)
             figure_files.append(str(figure_path))
 
     embedding.uns["supervised_umap"] = {

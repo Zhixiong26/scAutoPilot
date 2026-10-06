@@ -141,8 +141,8 @@ Notebook 把基础 QC 判定写入 `obs['pass_basic_qc']`，记录各 cohort 过
   分别保存 `X_umap_before_harmony` 和 `X_umap_after_harmony`，用相同参数比较 Harmony 前后 sample 分布。
 - Check on the Harmony UMAP whether `total_counts` and `pct_counts_mt` still dominate the embedding structure.
   在 Harmony UMAP 上检查 `total_counts`、`pct_counts_mt` 是否仍主导嵌入结构。
-- Embedding figures follow one panel standard: every panel is exactly 4.0 in × 4.0 in (1200 × 1200 px at 300 dpi), with equal, co-centred x/y data windows, `aspect='equal', adjustable='box'`, and one shared window per row. Continuous panels turn scanpy's default right-side colorbar off (`colorbar_loc=None`) and draw one horizontal colorbar per panel in a row of its own below the panels; categorical legends stay outside the panel on its right, and a palette shared by a row is labelled on the rightmost panel only. These dimensions are notebook literals, not sidecar keys or searchable parameters.
-  嵌入图统一遵循一个面板标准：每个面板固定 4.0 in × 4.0 in（300 dpi 下 1200 × 1200 px），x/y 数据窗口等长、同中心并设 `aspect='equal', adjustable='box'`，同一行共用一个窗口。连续数值面板关闭 scanpy 默认的右侧 colorbar（`colorbar_loc=None`），改为在面板行下方单独一排为每个面板画一条水平 colorbar；分类图例保持在面板右侧外，同一行共用配色时只在最右面板画图例。这些尺寸是 notebook 内的字面量，不是 sidecar 键或可搜索参数。
+- Every intermediate and final embedding uses `Scripts/Common/embedding_plot.py`: an 8 × 8 in square exported canvas (2400 × 2400 px at 300 dpi), including its keys, without tight cropping. A single-panel plot has 4 × 4 in equal-aspect axes; comparisons use smaller square panels in a vertical pair or grid within the same canvas. Before/after panels retain common x/y data windows. Categorical legends are one vertical column on the right; each numerical panel has one external vertical colour bar. These are presentation constants, never searchable analysis parameters. Use `save_embedding()` for publication renderers as well.
+  所有中间和最终嵌入图由 `Scripts/Common/embedding_plot.py` 统一导出：含图例的画布固定 8 × 8 in（300 dpi 下 2400 × 2400 px），禁止 tight 裁切。单图绘图区为 4 × 4 in、等比例正方形；对比图在同规格画布内上下排列或网格排列较小的正方面板，before/after 保留共同数据窗口。分类图例在右侧单列；每个数值面板配一条外置竖直色条。发表图辅助脚本也必须调用 `save_embedding()`；这些是展示常量，不是可搜索分析参数。
 - Run Leiden on the post-Harmony neighbour graph with `LEIDEN_RESOLUTION=0.8` and random seed `0`, and inspect the CYL/ZCP composition of every cluster（示例样本名 / example sample labels）。
   在 Harmony 后邻接图上使用 `LEIDEN_RESOLUTION=0.8`、随机种子 `0` 运行 Leiden，并检查每个 cluster 的 CYL/ZCP 构成。
 
@@ -175,8 +175,8 @@ Notebook 把基础 QC 判定写入 `obs['pass_basic_qc']`，记录各 cohort 过
   在 Harmony 后坐标分别生成 Leiden、cell type、sample 和 QC UMAP；只有存在经过验证的 `obs['group']` 时才生成 group UMAP。
 - All notebook figures are written as 300 dpi PNGs into `Results/Scanpy/<run-id>/figures/` and registered in the manifest at the same time.
   所有 Notebook 图片以 300 dpi PNG 写入 `Results/Scanpy/<run-id>/figures/`，同时登记到 manifest。
-- Those PNGs stay comparable across rounds because the panel geometry is fixed: exploratory and final annotation figures use the same 4.0 in square panels and the same colouring convention, so a size difference between two rounds is never a plotting artefact.
-  这些 PNG 跨轮次保持可比，因为面板几何是固定的：中间探索图与最终注释图使用同样的 4.0 in 正方面板和同样的着色约定，两轮之间的尺寸差异不会来自绘图本身。
+- Those PNGs stay comparable across rounds: exploratory and final single-panel annotation figures use the same 8 in square canvas, 4 in square axes, single-column legend and colouring convention. Compare matching layouts; multi-panel overviews have smaller axes.
+  中间探索图与最终单面板注释图使用同样的 8 in 方形画布、4 in 正方绘图区、单列图例和着色约定。跨轮比较相同布局；多面板概览的绘图区较小。
 
 ### 10. Confirmation, protection and export / 确认、保护与导出
 
@@ -301,7 +301,7 @@ Every iteration round follows / 每轮迭代遵循：
 2. State the concrete defect to be improved and the rationale for the candidate parameters. 说明要改善的具体缺陷及候选参数的理由。
 3. Write the candidate run into an independent iteration directory; do not overwrite the current formal results. 将候选运行写入独立的迭代目录，不覆盖当前正式结果。
 4. Re-run from the earliest affected step; when the cluster set changes, discard the old number mapping and recompute markers and the annotation. 从最早受影响步骤开始重跑；cluster 集合变化时废弃旧编号映射并重新计算 marker、重新注释。
-5. Compare candidate and baseline side by side with fixed colours, category order and plot dimensions — the panel size is pinned by the square-panel standard in §7 (4.0 in per panel), so the comparison never rests on a rescaled point cloud. 使用固定配色、类别顺序和绘图尺寸并排比较候选与基线——面板尺寸由 §7 的正方形面板标准固定（每面板 4.0 in），比较不会建立在被缩放的散点上。
+5. Compare matching candidate and baseline single-panel exports side by side with fixed colours, category order and plot dimensions — §7 fixes the square canvas at 8 in and the single-panel axes at 4 in. 使用固定配色、类别顺序和相同布局并排比较候选与基线——§7 将方形画布固定为 8 in，单面板绘图区固定为 4 in。
 6. Accept the candidate as the new baseline only when the target defect improved and markers, QC, sample structure, rare populations and stability did not visibly degrade. 只有目标缺陷改善，且 marker、QC、样本结构、稀有群和稳定性没有明显退化时，才接受候选为新基线。
 7. Update `Report.md` and keep examining the new baseline; start another round when evidence still supports further optimization. 更新 `Report.md`，继续检查新基线；仍有证据支持的优化空间时进入下一轮。
 

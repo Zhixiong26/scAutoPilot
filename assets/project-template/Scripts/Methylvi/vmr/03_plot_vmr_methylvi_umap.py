@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "Common"))
+from embedding_plot import save_embedding
 
 os.environ.setdefault("MPLBACKEND", "Agg")
 
@@ -36,7 +40,7 @@ def main() -> None:
             embedding, color=column, show=False, return_fig=True,
             title=f"VMR-MethylVI UMAP — {column}",
         )
-        figure.savefig(args.output_dir / filename, dpi=300, bbox_inches="tight")
+        save_embedding(figure, args.output_dir / filename)
     print(f"Wrote {len(plots)} VMR-MethylVI UMAPs to {args.output_dir}", flush=True)
 
 

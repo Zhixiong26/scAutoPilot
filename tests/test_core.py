@@ -93,25 +93,6 @@ def embedding_calls(source: str) -> list:
     return calls
 
 
-def panel_standard_source(source: str) -> str:
-    """The constants and function bodies of the embedding-panel standard, as one source string.
-
-    Taken out of the notebook rather than re-typed, so the test measures the code that will
-    actually run instead of a paraphrase of it.
-    """
-    wanted = {"PANEL_INCHES", "PANEL_PAD", "PANEL_GAP_INCHES", "LEGEND_INCHES", "COLORBAR_INCHES",
-              "COLORBAR_BAR_INCHES", "COLORBAR_INSET_INCHES", "square_panels", "embedding_figure",
-              "panel_mappable", "bottom_colorbar"}
-    pieces = []
-    for node in ast.parse(source).body:
-        if isinstance(node, ast.FunctionDef) and node.name in wanted:
-            pieces.append(ast.get_source_segment(source, node))
-        elif isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id in wanted
-                                                  for target in node.targets):
-            pieces.append(ast.get_source_segment(source, node))
-    return "\n".join(pieces)
-
-
 def visual_sensor_figure_files() -> list:
     """The filenames the visual sensor looks up, read from its source so no import is needed."""
     source = (ROOT / "scautopilot/review/visual.py").read_text(encoding="utf-8")
@@ -1958,102 +1939,71 @@ class SkillTests(unittest.TestCase):
         self.assertIn("proposal = top_label", source)
         self.assertNotIn("proposal = top_label if status == 'proposed' else 'Unassigned'", source)
 
-    def test_embedding_figures_use_the_square_panel_standard(self):
-        """Every embedding figure is drawn on the same square panel, not on a default canvas."""
+    def test_embedding_figures_use_the_shared_square_standard(self):
+        """The notebook imports the one geometry rule and explicitly disables default bars."""
         source = notebook_source(
             ROOT / "assets/project-template/Scripts/Scanpy/Notebooks/scanpy_workflow.ipynb"
         )
-        self.assertIn("PANEL_INCHES = 4.0", source)
-        self.assertIn("ax.set_aspect('equal', adjustable='box')", source)
-        for helper in ("def square_panels(", "def embedding_figure(", "def panel_mappable(",
-                       "def bottom_colorbar("):
-            self.assertIn(helper, source)
-        # The shapes this standard replaced must not come back: the default scanpy canvas, and
-        # its right-side colour bar left switched on.
-        self.assertNotIn("color=['total_counts', 'pct_counts_mt']", source)
-        self.assertNotIn("plt.subplots(1, 2, figsize=(13, 5)", source)
+        self.assertIn("from embedding_plot import embedding_figure, square_panels, panel_mappable, side_colorbar", source)
+        self.assertNotIn("def embedding_figure(", source)
+        self.assertNotIn("bottom_colorbar", source)
         calls = embedding_calls(source)
-        self.assertEqual(len(calls), 9, "a new embedding figure has to be counted in here")
+        self.assertEqual(len(calls), 9)
         for position, node in enumerate(calls):
-            keywords = {keyword.arg for keyword in node.keywords}
-            for keyword in ("ax", "frameon", "colorbar_loc"):
-                self.assertIn(keyword, keywords, "embedding call %d is missing %s" % (position, keyword))
+            keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+            self.assertIn("ax", keywords, "embedding call %d has no explicit axes" % position)
+            for name, expected in (("frameon", False), ("colorbar_loc", None)):
+                self.assertIn(name, keywords)
+                self.assertIsInstance(keywords[name], ast.Constant)
+                self.assertIs(keywords[name].value, expected)
 
     @unittest.skipUnless(importlib.util.find_spec("matplotlib") and importlib.util.find_spec("numpy"),
-                         "measuring the panel needs matplotlib and numpy")
-    def test_the_square_panel_helpers_pin_a_4_inch_panel(self):
-        """Run the shipped helpers and measure the panel they produce, in inches."""
+                         "measuring exported panels needs matplotlib and numpy")
+    def test_notebook_saves_the_same_geometry_it_constructs(self):
+        """Exercise the real notebook save_figure, including its shared exporter."""
         import matplotlib
         matplotlib.use("Agg", force=True)
         import matplotlib.pyplot as plt
-
+        import matplotlib.image as mpimg
+        sys.path.insert(0, str(ROOT / "assets/project-template/Scripts/Common"))
+        import embedding_plot as plots
         source = notebook_source(
             ROOT / "assets/project-template/Scripts/Scanpy/Notebooks/scanpy_workflow.ipynb"
         )
-        namespace = {"plt": plt}
-        exec(panel_standard_source(source), namespace)
-        panel_inches = namespace["PANEL_INCHES"]
-        self.assertEqual(panel_inches, 4.0)
-
-        figure, axes = namespace["embedding_figure"](ncols=2, legend=True)
-        width, height = figure.get_size_inches()
-        self.assertAlmostEqual(width, 2 * panel_inches + namespace["PANEL_GAP_INCHES"]
-                               + namespace["LEGEND_INCHES"], places=6)
-        self.assertAlmostEqual(height, panel_inches, places=6)
-        for column, ax in enumerate(axes):
-            box = ax.get_position()
-            self.assertAlmostEqual(box.width * width, panel_inches, places=6)
-            self.assertAlmostEqual(box.height * height, panel_inches, places=6)
-            self.assertAlmostEqual(box.x0 * width,
-                                   column * (panel_inches + namespace["PANEL_GAP_INCHES"]), places=6)
-
-        # A wide cloud on a square panel: the window closes around the pooled data range of the
-        # row instead of stretching the cloud, and both panels are read on that same window.
-        figure, axes = namespace["embedding_figure"](ncols=2)
-        axes[0].scatter([0.0, 10.0], [0.0, 2.0])
-        axes[1].scatter([4.0, 6.0], [0.0, 1.0])
-        # What scanpy's autoscale would have left behind, so the expected window is computable.
-        axes[0].set_xlim(0.0, 10.0); axes[0].set_ylim(0.0, 2.0)
-        axes[1].set_xlim(4.0, 6.0); axes[1].set_ylim(0.0, 1.0)
-        namespace["square_panels"](axes)
-        self.assertEqual(axes[0].get_xlim(), axes[1].get_xlim())
-        self.assertEqual(axes[0].get_ylim(), axes[1].get_ylim())
-        half = max(10.0, 2.0) / 2 * (1 + namespace["PANEL_PAD"])   # the long axis decides the window
-        expected = (((5.0 - half, 5.0 + half)), ((1.0 - half, 1.0 + half)))
-        for ax in axes:
-            for actual, limits in zip((ax.get_xlim(), ax.get_ylim()), expected):
-                self.assertAlmostEqual(actual[0], limits[0], places=9)
-                self.assertAlmostEqual(actual[1], limits[1], places=9)
-            self.assertIn(ax.get_aspect(), (1, 1.0, "equal"))
-            self.assertEqual(ax.get_adjustable(), "box")
-        figure.canvas.draw()
-        for ax in axes:
-            extent = ax.get_window_extent()
-            self.assertAlmostEqual(extent.width / figure.dpi, panel_inches, places=3)
-            self.assertAlmostEqual(extent.height / figure.dpi, panel_inches, places=3)
-
-        # A colour bar on its own row: below its panel, narrower than it, and taking no space
-        # from the panel itself -- the failure mode `ax=` would have introduced.
-        figure, axes = namespace["embedding_figure"](ncols=2, colorbar=True)
-        for ax in axes:
-            ax.scatter([0.0, 1.0], [0.0, 1.0], c=[0.0, 1.0])
-        namespace["square_panels"](axes)
-        figure.canvas.draw()
-        for ax in axes:
-            self.assertIs(namespace["panel_mappable"](ax), ax.collections[-1])
-            self.assertIsNotNone(namespace["bottom_colorbar"](figure, ax, ax.collections[-1], "total_counts"))
-        bars = [ax for ax in figure.axes if ax not in list(axes)]
-        self.assertEqual(len(bars), 2, "one colour bar per continuous panel, and nothing else")
-        figure.canvas.draw()
-        for panel, bar in zip(axes, bars):
-            self.assertLessEqual(bar.get_position().y1, panel.get_position().y0,
-                                 "the colour bar sits below the panel, never over its area")
-            self.assertGreater(bar.get_position().x0, panel.get_position().x0)
-            self.assertLess(bar.get_position().x1, panel.get_position().x1)
-            extent = panel.get_window_extent()
-            self.assertAlmostEqual(extent.width / figure.dpi, panel_inches, places=3)
-            self.assertAlmostEqual(extent.height / figure.dpi, panel_inches, places=3)
-        plt.close("all")
+        save_node = next(node for node in ast.parse(source).body
+                         if isinstance(node, ast.FunctionDef) and node.name == "save_figure")
+        with tempfile.TemporaryDirectory() as temp:
+            namespace = {"plt": plt, "save_embedding": plots.save_embedding,
+                         "FIGURE_DIR": Path(temp), "SAVED_FIGURES": []}
+            exec(ast.get_source_segment(source, save_node), namespace)
+            for count, expected_inches in ((1, 4.0), (2, 3.04)):
+                figure, axes = plots.embedding_figure(npanels=count)
+                for ax in axes:
+                    ax.scatter([0, 10], [0, 2], c=[0, 1])
+                plots.square_panels(axes)
+                before = [ax.get_position().bounds for ax in axes]
+                for ax in axes:
+                    plots.side_colorbar(figure, ax, plots.panel_mappable(ax), "total_counts")
+                filename = "umap_%d.png" % count
+                namespace["save_figure"](filename, figure)
+                self.assertEqual(mpimg.imread(Path(temp) / filename).shape[:2], (2400, 2400))
+                figure.canvas.draw()
+                self.assertEqual(len(figure.axes), 2 * count)
+                for ax, position in zip(axes, before):
+                    for actual, expected in zip(ax.get_position().bounds, position):
+                        self.assertAlmostEqual(actual, expected, places=9)
+                    box = ax.get_window_extent()
+                    self.assertAlmostEqual(box.width / figure.dpi, expected_inches, places=6)
+                    self.assertAlmostEqual(box.height / figure.dpi, expected_inches, places=6)
+                    bar = next(a._colorbar for a in figure.axes
+                               if getattr(a, "_colorbar", None) is not None
+                               and a._colorbar.mappable.axes is ax)
+                    self.assertEqual(bar.orientation, "vertical")
+                    self.assertGreater(bar.ax.get_position().x0, ax.get_position().x1)
+                self.assertEqual(axes[0].get_xlim(), axes[-1].get_xlim())
+                self.assertEqual(axes[0].get_ylim(), axes[-1].get_ylim())
+                plt.close(figure)
+            self.assertEqual(len(namespace["SAVED_FIGURES"]), 2)
 
     def test_scanpy_figure_filenames_are_unchanged(self):
         """The visual sensor finds its artifacts by name; a rename would silently find nothing."""

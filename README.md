@@ -41,6 +41,8 @@ ln -s "$HOME/scAutoPilot" \
 
 生成后的项目包含自己的脚本和运行工具，即使之后没有安装本 Skill，也可独立运行。
 
+UMAP 绘图统一规范（v0.8.2）：中间候选、审核后 baseline 与发表图均使用 `Scripts/Common/embedding_plot.py` 的 `save_embedding()`，导出 8×8 英寸方形画布、300 dpi（PNG 2400×2400）。分类图例默认右侧单列，数值色条使用单条竖直布局；禁止 tight 裁切改变画布形状。单图绘图区为 4×4 英寸，对比图在同规格画布内排列较小的正方面板。旧项目与已有图片不会自动改写，升级运行代码后需重新 plan/validate。
+
 ### 3. 前置条件
 
 - orchestrator Python 3.9 或更高版本；

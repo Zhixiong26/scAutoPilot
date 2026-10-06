@@ -94,8 +94,10 @@ If the visual backend is optional and unavailable, the state says `degraded` or
 `unavailable`; if it is required, the round fails closed before publication.
 
 Every artifact the sensor receives is drawn under the embedding-panel standard
-in `references/scanpy.md`: the same 4.0 in square panel and the same colouring
-convention in every round. Recorded dimensions are therefore comparable across
+in `references/scanpy.md`: the same 8 × 8 in square exported canvas, 4.0 in single
+panel, single-column legend and the same colouring convention in every round.
+Comparison overviews use smaller square panels; compare matching layouts.
+Recorded dimensions are therefore comparable across
 rounds, and a reported shape is never an artefact of a point cloud stretched
 into a non-square axes box.
 

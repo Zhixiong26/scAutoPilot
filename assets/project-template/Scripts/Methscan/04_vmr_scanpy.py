@@ -3,7 +3,11 @@
 
 import argparse
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Common"))
+from embedding_plot import save_embedding
 
 import matplotlib
 matplotlib.use("Agg")
@@ -207,8 +211,7 @@ def main():
             )
         ax.set(xlabel="UMAP1", ylabel="UMAP2", title="VMR methylation: %s" % color)
         ax.legend(markerscale=2, bbox_to_anchor=(1.02, 1), loc="upper left", frameon=False)
-        fig.tight_layout()
-        fig.savefig(args.output_dir / "figures" / ("umap_%s.png" % color), dpi=300)
+        save_embedding(fig, args.output_dir / "figures" / ("umap_%s.png" % color))
         plt.close(fig)
     adata.write_h5ad(args.output_dir / "objects" / "methscan_vmr.h5ad", compression="gzip")
     parameters = vars(args).copy()

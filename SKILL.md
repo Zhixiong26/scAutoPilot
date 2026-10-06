@@ -22,6 +22,7 @@ Create auditable projects from user-supplied data without assuming sample names,
 
 ## Invariants
 
+- Every UMAP, from intermediate candidates to reviewed baselines and publication figures, must use `Scripts/Common/embedding_plot.py` and its `save_embedding()` helper: an 8 × 8 in square canvas, 300 dpi PNG (2400 × 2400 px), equal-aspect square axes, a single-column categorical legend outside the panel, and one vertical colour bar per numerical panel. Apply the same convention to ad-hoc final rendering helpers, not just the packaged notebook. Never use tight cropping for embeddings or silently switch to multiple legend columns; split an overcrowded comparison into single-panel square figures instead. See [figure standard](references/scanpy.md#figure-standard). Non-embedding dotplots/heatmaps are not forced square.
 - Treat RNA, ALLC, annotation, genome, and pre-existing shared environments as read-only inputs.
 - Every analysis input must be reachable from the project as `Data/<name>`. Link or download it there rather than configuring an absolute path elsewhere; a project that reads outside its own directory is not reproducible from it, and the sample manifest is where the deviation becomes invisible.
 - Never upgrade or mutate a discovered shared environment. Create missing dependencies under the generated project's `.environments/` directory or an explicitly configured new prefix.
