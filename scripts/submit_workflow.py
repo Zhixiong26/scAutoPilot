@@ -63,6 +63,15 @@ def completed_evidence(run_dir: Path, task_id: str, input_signature: str) -> boo
         status = json.loads(status_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
+    plan_path = run_dir / "plan.json"
+    if plan_path.is_file():
+        from figures_comparison_evidence import task_evidence
+        try:
+            plan = json.loads(plan_path.read_text(encoding="utf-8"))
+            item = next(x for x in plan["tasks"] if x["id"] == task_id)
+            task_evidence(run_dir, plan, item)
+        except (OSError, ValueError, KeyError, TypeError, StopIteration):
+            return False
     outputs_valid, _ = validate_recorded_outputs(status.get("outputs", []))
     return (status.get("status") == "complete" and status.get("return_code") == 0
             and status.get("input_signature") == input_signature and outputs_valid)

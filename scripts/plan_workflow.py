@@ -78,6 +78,9 @@ def validate_dag(tasks: List[dict]) -> None:
 
 def make_tasks(routes: Dict[str, bool], analysis: Dict[str, Any]) -> List[dict]:
     routes = close_routes(routes)
+    delivery = analysis.get("figures_comparison", {})
+    if not isinstance(delivery, dict) or not isinstance(delivery.get("enabled", True), bool):
+        raise WorkflowError("analysis.figures_comparison.enabled must be a boolean")
     thresholds = analysis.get("methscan", {}).get("vmr_thresholds", [0.01, 0.02, 0.05])
     feature_targets = analysis.get("methylvi", {}).get("feature_targets", [10000, 30000])
     if any(routes.get(name) for name in ("methscan_vmr", "methscan_dmr", "methylvi_vmr", "methylvi_vmr_dmr")):
@@ -144,6 +147,27 @@ def make_tasks(routes: Dict[str, bool], analysis: Dict[str, Any]) -> List[dict]:
         terminal = {item["id"] for item in tasks}
         for item in tasks:
             terminal.difference_update(item["dependencies"])
+        if delivery.get("enabled", True):
+            weights = analysis.get("methylvi", {}).get("supervised_umap_weights", [0.2, 0.5, 0.7, 0.9])
+            if (not isinstance(weights, list) or not weights
+                    or any(isinstance(x, bool) or not isinstance(x, (int, float)) or not 0 <= x <= 1 for x in weights)
+                    or len(set(weights)) != len(weights)):
+                raise WorkflowError("supervised_umap_weights must be unique numbers in [0, 1]")
+            reuse = delivery.get("source_runs", {})
+            if not isinstance(reuse, dict) or any(
+                    not isinstance(v, dict) or set(v) != {"run_id", "task_id"}
+                    or any(not isinstance(x, str) or not x or "/" in x or x in {".", ".."} for x in v.values())
+                    for v in reuse.values()):
+                raise WorkflowError("figures_comparison.source_runs must map task IDs to run_id/task_id")
+            if not set(reuse) <= {x["id"] for x in tasks}:
+                raise WorkflowError("figures_comparison.source_runs names an unplanned task")
+            spec = {"routes": routes, "weights": weights, "source_runs": reuse,
+                    "allcools_max_features": max(feature_targets) if routes.get("allcools") else None,
+                    "models": [{"id": x["id"], "parameters": x["parameters"]} for x in tasks],
+                    "supervised_target_key": "cell_type"}
+            tasks.append(task("figures_comparison", "plot", sorted(terminal), spec,
+                              environment="scanpy_allcools"))
+            terminal = {"figures_comparison"}
         tasks.append(task("workflow_summary", "summary", sorted(terminal)))
     validate_dag(tasks)
     return tasks

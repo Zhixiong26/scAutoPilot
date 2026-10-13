@@ -88,6 +88,16 @@ def main() -> int:
     result = Path(plan["result_dir"])
     result.mkdir(parents=True, exist_ok=True)
     args.task_dir.mkdir(parents=True, exist_ok=True)
+    # Presentation needs no methylation references or annotation normalization.
+    # Dispatch before those stage-specific preconditions and writes.
+    if args.task == "figures_comparison":
+        environments = {row["stage"]: row for row in load_environments(root)}
+        python = resolve_path(root, environments.get("scanpy_allcools", {}).get("python"))
+        if python is None:
+            raise WorkflowError("figure delivery requires scanpy_allcools Python")
+        subprocess.check_call([str(python), str(root / "Scripts/Common/figures_comparison.py"),
+                               "--project", str(root), "--run-id", args.run_id], cwd=str(root))
+        return 0
     files = project_files(root)
     analysis = cfg["analysis"]
     meth = analysis.get("methscan", {})
@@ -246,13 +256,20 @@ def main() -> int:
     elif task.startswith("methscan_vmr_"):
         threshold = str(parameters["threshold"])
         run(["bash", scripts / "Methscan/run_methscan_branch.sbatch", meth_root, threshold])
-        record([meth_root / ("var_%s.COMPLETE" % threshold), meth_root / "04_scan" / ("var_%s" % threshold) / "VMRs.bed"])
+        vmr = meth_root / "06_scanpy" / ("var_%s" % threshold)
+        record([meth_root / ("var_%s.COMPLETE" % threshold), meth_root / "04_scan" / ("var_%s" % threshold) / "VMRs.bed",
+                vmr / "objects/methscan_vmr.h5ad", vmr / "tables/cell_embedding.tsv",
+                vmr / "tables/cell_missingness_qc.tsv", vmr / "run_parameters.json"])
     elif task == "methscan_pairwise_dmr":
         run(["bash", scripts / "Methscan/run_methscan_methdiff.sbatch", meth_root])
         record([meth_root / "methdiff.COMPLETE", meth_root / "07_methdiff/pairwise_summary.tsv"])
     elif task == "methscan_hypo_heatmaps":
         run(["bash", scripts / "Methscan/run_methscan_hypo_heatmaps.sbatch", meth_root])
-        record([meth_root / "hypo_heatmaps.COMPLETE"])
+        summary_path = meth_root / "hypo_dmr_heatmap_summary.json"
+        summary = json.loads(summary_path.read_text())
+        plots = [Path(row[key]) for row in summary["plots"]["samples"] if row.get("status") == "complete"
+                 for key in ("mean_ratio_plot", "zscore_plot", "zscore_compressed_colorbar_plot")]
+        record([meth_root / "hypo_heatmaps.COMPLETE", summary_path] + plots)
     elif task == "methscan_pooled_dmr":
         run(["bash", scripts / "Methscan/run_methscan_pooled_methdiff.sbatch", meth_root])
         record([meth_root / "pooled/methdiff.COMPLETE", meth_root / "pooled/07_methdiff/pairwise_summary.tsv"])
@@ -277,7 +294,8 @@ def main() -> int:
             if target != max_features:
                 run([methylvi_python, scripts / "Methylvi/shared/06_subset_methylvi_input.py", "--input", maximum / "input.h5mu",
                      "--output", route / ("features_%d/input.h5mu" % target), "--features", target], extra)
-        record([route / ("features_%d/input.h5mu" % value) for value in feature_targets])
+        record([route / ("features_%d/input.h5mu" % value) for value in feature_targets]
+               + [maximum / "allcools.h5ad", maximum / "cluster_summary.json"])
     elif task.startswith("methylvi_allcools_"):
         features = int(parameters["features"])
         route = mvi_root / "allcools" / ("features_%d" % features)

@@ -352,3 +352,7 @@ Only when all of the following hold may the report be written as "pass":
 - The save behaviour matches the explicit intent of `ANALYSIS_CONFIRMED` and `OVERWRITE_DATA_OUTPUTS`. 保存行为符合 `ANALYSIS_CONFIRMED` 和 `OVERWRITE_DATA_OUTPUTS` 的明确意图。
 - Machine-readable outputs agree with the notebook's state in this round. 机器可读输出与 Notebook 本轮状态一致。
 - `Report.md` records this round's inputs, code identity, results, differences and unresolved risks. `Report.md` 已记录本轮输入、代码身份、结果、差异和未决风险。
+
+## Batch figure delivery / 同批次图集
+
+New run plans collect this route’s results under `Results/runs/<run-id>/figures_comparison/`. The manifest records source identity and artifact checksums. Ordinary and supervised embeddings are separate; DMR heatmaps are existing verified copies. Stage Reports expose rendering and visual-review status independently of analysis completion.

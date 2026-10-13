@@ -13,3 +13,7 @@ ALLCools reuses the common MethSCAn selection/prepare/filter chain because its e
 Three routes share one training core: `allcools` (5-kb bins), `vmr` (variance-thresholded VMR regions), and `vmr_dmr` (selected VMRs plus every unique pooled DMR). Each route owns a `00_*_config.sh` declaring its directory layout and defaults; `vmr_dmr` reuses the `vmr` feature inputs rather than rescanning ALLCs, so it depends on that route's completed signature. Route configs resolve the shared experiment values from the entry `00_experiment_config.sh` and re-export them under the neutral `SCMO_*` names, so a stage reads one namespace regardless of which route invoked it. `SCMO_MVI_EXPERIMENT_ROOT` is the parent of all routes; `SCMO_MVI_ROOT` is only its `allcools/` subdirectory.
 
 The packaged `run.sh` runners and `slurm/*.sbatch` wrappers execute one stage without a plan, for exploration, smoke testing, and recovery. They resolve resources from scheduler profiles, verify the same completion markers the DAG does, and never substitute for a run's completion evidence. Production MethylVI work goes through the run DAG.
+
+## Batch comparison
+
+Native ALLCools UMAP/L1 and MethylVI UMAP/methylVI_leiden are distinct deliveries. MethylVI ordinary and supervised views use separate atlases. A valid supervised skip retains ordinary figures and records a reason; missing expected coordinates fail. See [batch delivery](figures-comparison.md).

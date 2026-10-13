@@ -29,7 +29,7 @@ BUILTIN_TASKS = {
     "scanpy", "methscan_select_convert", "methscan_prepare", "methscan_filter",
     "methscan_smooth", "methscan_pairwise_dmr", "methscan_hypo_heatmaps",
     "methscan_pooled_dmr", "allcools_features", "pooled_dmr_prepare",
-    "pooled_dmr_counts", "workflow_summary",
+    "pooled_dmr_counts", "workflow_summary", "figures_comparison",
 }
 BUILTIN_TASK_PREFIXES = (
     "methscan_vmr_", "methylvi_allcools_", "methylvi_vmr_features_",
@@ -63,7 +63,7 @@ def normalize_job_state(raw: Any) -> str:
 RUNLOG_START = "<!-- SCMO-RUNLOG:START -->"
 RUNLOG_END = "<!-- SCMO-RUNLOG:END -->"
 RUNLOG_TITLE = "## Run log / 运行记录"
-RUNLOG_FORMAT = 1
+RUNLOG_FORMAT = 2
 # Superseded single-block format written by older releases; migrated on first rewrite.
 LEGACY_RUN_STATE_START = "<!-- SCMO-RUN-STATE:START -->"
 LEGACY_RUN_STATE_END = "<!-- SCMO-RUN-STATE:END -->"
@@ -134,7 +134,7 @@ def marked_region(text: str, start: str, end: str) -> Optional[str]:
 def stage_for_task(task_id: Any) -> Optional[str]:
     """The stage report a task belongs to, or None when no stage owns it.
 
-    `workflow_summary` is deliberately unowned: it summarises the whole run and
+    `workflow_summary` and `figures_comparison` are deliberately unowned: they cover the whole run and
     would otherwise appear in every stage log as though each stage had run it.
     """
     text = str(task_id or "")
@@ -314,6 +314,12 @@ def validate_recorded_outputs(values: Iterable[Any], allow_empty: bool = False) 
             missing = [str(artifact) for artifact in artifacts if not Path(str(artifact)).exists()]
             if missing:
                 return False, "recorded artifacts are absent: %s" % ", ".join(missing)
+            if "delivery_evidence" in payload:
+                from figures_comparison_evidence import validate_delivery_record
+                try:
+                    validate_delivery_record(payload, path)
+                except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
+                    return False, "invalid figure delivery evidence: %s" % exc
     return True, None
 
 
@@ -1011,6 +1017,12 @@ def run_record_lines(summary: Dict[str, Any], stage: Optional[str] = None) -> Li
         "- Input signature / 输入签名：`%s`" % (signature if signature else "unknown"),
         "- Evidence / 证据：`.workflow/runs/%s/run_summary.json`" % run_id,
     ]
+    if "figure_delivery_status" in summary:
+        lines.extend([
+            "- Figure delivery / 图集：`%s`; visual review / 视觉审核：`%s`"
+            % (summary["figure_delivery_status"], summary.get("visual_review_status", "pending")),
+            "- Figure manifest / 图集清单：`Results/runs/%s/figures_comparison/delivery_manifest.json`" % run_id,
+        ])
     return lines
 
 

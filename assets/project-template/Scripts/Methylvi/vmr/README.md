@@ -114,3 +114,7 @@ supervised UMAP 权重 0.5/0.7/0.9 仅为敏感性分析，会扭曲 latent 结�
 `target_weight=0.2` 才是主要的 supervised 视图。训练使用整数 `mc/cov`、
 `sample_id` batch key、seed 0、最多 500 epochs、`batch_size=32`，并由验证集
 ELBO 控制 early stopping。
+
+## Batch figure delivery / 同批次图集
+
+New run plans collect this route’s results under `Results/runs/<run-id>/figures_comparison/`. The manifest records source identity and artifact checksums. Ordinary and supervised embeddings are separate; DMR heatmaps are existing verified copies. Stage Reports expose rendering and visual-review status independently of analysis completion.

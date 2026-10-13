@@ -493,3 +493,7 @@ The tool writes the run's `analysis_signature` and cluster set into the profile 
 **The first pass auto-annotates; it does not stop at `Unassigned`.** A candidate first uses an explicitly supplied per-cell reference when exact cell IDs cover the analysed cells, recording cluster consensus, purity, disagreements, and current-run markers. Without a complete reference, the agent assigns every cluster from current-run markers, QC, sample composition, and marker references, preserving low confidence and alternatives rather than withholding a label. It then delivers a fully coloured candidate UMAP and asks the user to audit it. Only after approval or correction is the signed profile recorded and the reviewed `baseline` produced; automatic candidate labels never masquerade as formal annotations or feed cell-type DMR. See [Scanpy and Harmony](references/scanpy.md).
 
 See the linked references above for configuration, route-specific behavior, resource selection, troubleshooting, and evidence contracts.
+
+## Batch comparison figures (0.9.0)
+
+New runs include `figures_comparison` after analysis and before the final summary. All seven routes receive explicit coverage, including native ALLCools UMAP and existing DMR heatmaps. Delivered images and tables are checksum-verified, interrupted publication is recoverable, and visual review has a separate status. See [delivery and upgrade instructions](references/figures-comparison.md). Set `analysis.figures_comparison.enabled: false` before planning to disable the task.

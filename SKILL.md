@@ -52,3 +52,7 @@ Create auditable projects from user-supplied data without assuming sample names,
 - Read [documentation](references/documentation.md) when creating or updating README, Report, manifests, and completion evidence.
 - Read [Git collaboration](references/git.md) only when the user asks to initialize, commit, connect, or push a repository.
 - Read [automatic Scanpy review](references/optimization.md) when asked to benchmark, audit, or iteratively optimize Scanpy/UMAP candidates.
+
+## Batch figure delivery
+
+New plans deliver comparison figures for all selected routes before the final workflow summary. Read [batch figure delivery](references/figures-comparison.md) for source fields, DMR collection, supervised skips, output evidence, recovery and visual review. Atlas canvases are an explicit non-square exception; individual embedding panels retain the shared 8×8 inch / 300 dpi exporter. Automatic workflow completion does not imply visual review passed.

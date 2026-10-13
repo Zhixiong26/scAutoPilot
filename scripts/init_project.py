@@ -30,6 +30,7 @@ RUNTIME_TOOLS = (
     "submit_workflow.py", "inspect_run.py", "update_report.py", "record_annotation_review.py", "link_data.py",
     "review_scanpy_iteration.py", "apply_scanpy_round.py", "system_one_adapter_runner.py",
     "visual_vlm_runner.py",
+    "figures_comparison_evidence.py", "record_figure_review.py",
 )
 
 # Reference files the skill ships so a methylation project needs no reference
@@ -48,6 +49,7 @@ HG38_GENOME_IDS = frozenset({"grch38", "hg38", "grch38.p14"})
 HUMAN_ORGANISMS = frozenset({"human", "homo sapiens"})
 
 DEFAULT_ANALYSIS = {
+    "figures_comparison": {"enabled": True},
     # Every value mirrors the authoritative workflow notebook
     # (Scripts/Scanpy/Notebooks/scanpy_workflow.ipynb); the notebook documents each step.
     "scanpy": {

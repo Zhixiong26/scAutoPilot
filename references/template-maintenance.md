@@ -15,3 +15,5 @@ Input data is never packaged. The template ships the `Data/` convention, not its
 The validator currently includes all notebooks under `Scripts/` and `tools/`, including the shipped worked example, using their cell types/sources only. The managed Scanpy task executes `scanpy_workflow.ipynb`; do not describe that notebook as excluded from the execution signature.
 
 Standalone Slurm wrappers are packaged alongside the run DAG so a stage can be explored, smoke-tested, or recovered without a plan. Each wrapper must resolve resources from a named scheduler profile, carry no `#SBATCH` site directive and no absolute site path, and never stand in for a run's completion evidence.
+
+Figure delivery adds signed runtime tools and changes the default DAG. Upgrade only idle generated projects, then plan a new run and validate it. Never modify active/frozen plans in place. Runtime distribution includes figures_comparison_evidence.py and record_figure_review.py; generated projects do not import the installed skill. See [delivery contract](figures-comparison.md).

@@ -394,6 +394,9 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
     samples = load_samples(project, require_paths=require_paths)
     active = [row for row in samples if row["include"]]
     errors, warnings = [], []
+    delivery = cfg.get("analysis", {}).get("figures_comparison", {})
+    if not isinstance(delivery, dict) or not isinstance(delivery.get("enabled", True), bool):
+        errors.append("analysis.figures_comparison.enabled must be a boolean")
     if int(cfg.get("schema_version", 1)) == 1:
         warnings.append("schema v1 is deprecated; migrate the project configuration to schema v2")
     all_rna_samples = [row for row in active if row["rna_path"]]

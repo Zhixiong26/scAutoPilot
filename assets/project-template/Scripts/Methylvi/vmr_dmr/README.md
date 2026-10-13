@@ -101,3 +101,7 @@ This root is separate from the completed baseline root, which is never
 overwritten.
 
 该根目录与已完成的基线根目录相互独立，基线永不被覆盖。
+
+## Batch figure delivery / 同批次图集
+
+New run plans collect this route’s results under `Results/runs/<run-id>/figures_comparison/`. The manifest records source identity and artifact checksums. Ordinary and supervised embeddings are separate; DMR heatmaps are existing verified copies. Stage Reports expose rendering and visual-review status independently of analysis completion.

@@ -61,3 +61,7 @@ ordinary and supervised UMAPs, methylation QC, and `model.COMPLETE` markers.
 基线实验根目录（`Results/MethylVI/<run-name>`，8/8 模型）中两个 ALLCools 模型
 （Top10k 与 Top30k）均已完成，包括 embedding、普通与 supervised UMAP、甲基化
 QC 以及 `model.COMPLETE` 标记。
+
+## Batch figure delivery / 同批次图集
+
+New run plans collect this route’s results under `Results/runs/<run-id>/figures_comparison/`. The manifest records source identity and artifact checksums. Ordinary and supervised embeddings are separate; DMR heatmaps are existing verified copies. Stage Reports expose rendering and visual-review status independently of analysis completion.

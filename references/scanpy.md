@@ -29,3 +29,7 @@ Single-panel axes remain 4 × 4 in; comparison figures fit smaller square panels
 Categorical legends use **one vertical column on the right**, preserving colours and category order; long display labels wrap and crowded legends reduce font size. Continuous colour bars use **one vertical bar per numerical panel**, outside its square axes. If a comparison cannot fit readable keys, export its panels separately; do not silently add a second legend column or clip labels. Numeric Leiden labels placed on the data are unchanged. Dotplots, heatmaps and non-embedding QC charts retain content-appropriate layouts.
 
 The same exporter is required in manually authored final/publication rendering helpers. Do not change scientific coordinates, clustering, labels or palettes just to achieve this layout. The shared Python source is part of `code_signature`; adopting it in an existing generated project requires a fresh plan and validation, not overwriting an in-flight run. Updating this skill does not retroactively redraw existing outputs.
+
+## Batch comparison
+
+The comparison task reads the completion summary annotation_key and its declared h5ad. Candidate labels remain candidate_cell_type; reviewed labels use cell_type. The sample field is cohort and the coordinate basis is X_umap_after_harmony. See [batch delivery](figures-comparison.md) for the atlas canvas exception, source colours and visual review.

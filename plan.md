@@ -680,3 +680,7 @@ M5 的跨模态配对、泄漏控制与跨模态 Pareto 属交付底线；Jev �
 | Slurm array 的实际合并率 | §10 允许同环境、同资源、同依赖层任务组成 array，但未量化三条路线能合并多少任务 | 合并率低时下调 array 投入，优先保证提交正确性 |
 | 未核验参考项（CellAgent xuanyuelingwu、CellMaster） | §2 标注本轮未完成独立源码核验 | 不构成任何交付前置，不作为 M5 的验收依据 |
 | 使用者数据不足以验证某路线时的处理 | §14 已要求列为未验收 | 保持未验收，不降低要求宣称完成 |
+
+### Batch comparison delivery (0.9.0)
+
+All selected analysis routes feed a regular figures_comparison task, followed by the final workflow_summary. Seven-route coverage includes existing DMR heatmaps and native ALLCools UMAP. Signed output evidence binds every artifact and manifest checksum. Analysis, rendering and explicit visual review have distinct statuses; publication is atomic and recoverable. Stage reports retain analysis counts and expose run-level delivery state. This presentation-only addition does not change scientific algorithms under §13.1. New Python files change execution signatures; upgrade idle projects using new run IDs. See references/figures-comparison.md for the implementation contract and release verification.

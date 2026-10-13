@@ -34,3 +34,7 @@
 - Run record missing, stale, or absent for one run: run `tools/update_report.py --project PROJECT` to rebuild the whole run log from `.workflow/runs/*/run_summary.json`, or add `--run-id ID` to require that one run to exist. Never edit inside the `SCMO-RUNLOG` region by hand — a human note belongs above it, where the tools never write. Re-inspecting a run updates its record in place and moves it to the end of the log, which is expected and not a duplicate.
 - Root README looks out of date: that is intended. It is written once at generation and frozen, so it never reports progress or results. Read `Report.md` for the run history, and regenerate the project if the configuration itself changed.
 - Documentation write failed during inspection: the run's verdict is unaffected. Find the recovery command in the stderr warning; a full disk or a read-only checkout is the usual cause.
+
+## Figure delivery interrupted or invalid
+
+Inspect the figures_comparison task failure record and attempt directory. A published delivery with identical signed inputs can rebuild missing task evidence on retry. Damaged or differently signed deliveries refuse overwrite; archive the invalid delivery explicitly before rebuilding. Missing supervised coordinates are only acceptable with a valid upstream skipped summary. See [recovery and provenance](figures-comparison.md).

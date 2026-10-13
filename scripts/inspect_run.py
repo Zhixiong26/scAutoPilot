@@ -143,10 +143,14 @@ def inspect(project: Path, run_id: str) -> dict:
                         and status_record.get("task_signature") == expected_signature
                         and outputs_valid
                     )
+                    if evidence_valid and planned['id'] == 'figures_comparison':
+                        from figures_comparison_evidence import task_evidence
+                        task_evidence(run_dir, plan, planned)
                     if not evidence_valid:
                         reason = output_reason or "completion evidence or signature mismatch"
-                except (OSError, ValueError, TypeError):
+                except (OSError, ValueError, TypeError, KeyError, AttributeError):
                     reason = "invalid task_status.json"
+                    evidence_valid = False
         elif marker.is_file() or status_path.is_file():
             reason = "incomplete marker/status evidence"
         state = "complete" if evidence_valid else scheduler_state
@@ -189,6 +193,24 @@ def inspect(project: Path, run_id: str) -> dict:
         "login_execution_tasks": login_tasks,
         "full_validation": full_validation,
     }
+    delivery = next((row for row in task_rows if row["task"] == "figures_comparison"), None)
+    if delivery:
+        from figures_comparison_evidence import review_state, read_json
+        analysis_rows = [row for row in task_rows if row["task"] not in {"figures_comparison", "workflow_summary"}]
+        result["analysis_status"] = ("complete" if all(row["evidence_valid"] for row in analysis_rows)
+                                     else "failed" if any(row["state"] in TERMINAL_BAD for row in analysis_rows)
+                                     else "pending")
+        result["figure_delivery_status"] = ("rendered_verified" if delivery["evidence_valid"]
+                                            else "failed" if delivery["state"] in TERMINAL_BAD
+                                            or delivery["complete_marker"] else "pending")
+        manifest = Path(plan["result_dir"]) / "figures_comparison/delivery_manifest.json"
+        result["visual_review_status"] = "pending"
+        if delivery["evidence_valid"]:
+            data = read_json(manifest)
+            result["visual_review_status"] = (review_state(manifest, run_dir / "figure_review.json")
+                                              if data.get("panels") or data.get("dmr_files") else "not_applicable")
+        elif (run_dir / "figure_review.json").exists():
+            result["visual_review_status"] = "stale"
     if login_tasks:
         print("WARNING: %d task(s) of run %s executed on the host that submitted them, not on a "
               "compute node: %s" % (len(login_tasks), run_id, ", ".join(login_tasks)), file=sys.stderr)

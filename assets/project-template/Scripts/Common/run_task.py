@@ -31,13 +31,22 @@ def validate_outputs(item, variables):
     valid, reason = validate_recorded_outputs(rendered)
     if not valid:
         raise WorkflowError(reason or "declared task output evidence is invalid")
+    if item["id"] == "figures_comparison":
+        from figures_comparison_evidence import read_json, validate_delivery_record
+        expected = str(Path(variables["task_dir"]) / "task_outputs.json")
+        if rendered != [expected]:
+            raise WorkflowError("figure task must declare task_outputs.json")
+        validate_delivery_record(read_json(expected), expected)
     return rendered
 
 
 def summarize_workflow(plan, run_dir):
     summary_task = next(item for item in plan["tasks"] if item["id"] == "workflow_summary")
     failures = []
-    for dependency in summary_task["dependencies"]:
+    dependencies = (sorted(item["id"] for item in plan["tasks"] if item["id"] != "workflow_summary")
+                    if any(item["id"] == "figures_comparison" for item in plan["tasks"])
+                    else summary_task["dependencies"])
+    for dependency in dependencies:
         dependency_plan = next(item for item in plan["tasks"] if item["id"] == dependency)
         task_dir = run_dir / "tasks" / dependency
         marker = task_dir / "task.COMPLETE"
@@ -46,10 +55,14 @@ def summarize_workflow(plan, run_dir):
             failures.append("%s lacks completion evidence" % dependency)
             continue
         status = json.loads(status_path.read_text(encoding="utf-8"))
+        if dependency == "figures_comparison":
+            from figures_comparison_evidence import task_evidence
+            task_evidence(run_dir, plan, dependency_plan)
         expected_signature = signature({"command": status.get("command", []),
                                         "parameters": dependency_plan.get("parameters", {})})
         outputs_valid, output_reason = validate_recorded_outputs(status.get("outputs", []))
-        if (status.get("status") != "complete" or status.get("input_signature") != plan.get("input_signature")
+        if (status.get("status") != "complete" or status.get("return_code") != 0
+                or status.get("input_signature") != plan.get("input_signature")
                 or status.get("code_signature") != plan.get("code_signature")
                 or status.get("task_signature") != expected_signature
                 or not outputs_valid):
@@ -57,7 +70,9 @@ def summarize_workflow(plan, run_dir):
                             (dependency, output_reason or "signature mismatch"))
     if failures:
         raise WorkflowError("workflow summary failed: %s" % "; ".join(failures))
-    payload = {"status": "complete", "tasks": len(plan["tasks"]), "input_signature": plan["input_signature"]}
+    payload = {"status": "complete", "tasks": len(plan["tasks"]),
+               "verified_tasks": dependencies, "verified_task_count": len(dependencies),
+               "input_signature": plan["input_signature"]}
     write_json(run_dir / "workflow_summary.json", payload)
     return [str(run_dir / "workflow_summary.json")]
 

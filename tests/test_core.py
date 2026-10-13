@@ -177,7 +177,9 @@ class SkillTests(unittest.TestCase):
                 "stage": stage, "python": sys.executable,
                 "executable": sys.executable, "version_command": sys.executable + " --version", "required": 1,
             } for stage in ("orchestrator", "scanpy_allcools", "methscan", "methylvi")],
-            "analysis": {"task_commands": {"scanpy": [
+            # This scheduler fixture deliberately creates no scientific embedding.
+            # Figure delivery is exercised with real small embeddings separately.
+            "analysis": {"figures_comparison": {"enabled": False}, "task_commands": {"scanpy": [
                 "/bin/sh", "-c",
                 "touch {task_dir}/artifact; printf '%s\\n' '{{\"artifacts\":[\"{task_dir}/artifact\"]}}' > {task_dir}/task_outputs.json",
             ]}},
@@ -763,7 +765,8 @@ class SkillTests(unittest.TestCase):
 
     def test_scanpy_subset_does_not_require_unused_methylation_environments(self):
         with tempfile.TemporaryDirectory() as temp:
-            project = self.generate(Path(temp), "paired")
+            project = self.generate(Path(temp), "paired", mutate=lambda intake:
+                                    intake["analysis"].pop("figures_comparison"))
             environments = project / "config/environments.tsv"
             lines = environments.read_text(encoding="utf-8").splitlines()
             kept = [lines[0]] + [line for line in lines[1:]
@@ -780,7 +783,10 @@ class SkillTests(unittest.TestCase):
                 "--routes", "scanpy", "--run-id", "scanpy-only",
             ])
             plan = json.loads((project / ".workflow/runs/scanpy-only/plan.json").read_text())
-            self.assertEqual([item["id"] for item in plan["tasks"]], ["scanpy", "workflow_summary"])
+            self.assertEqual([item["id"] for item in plan["tasks"]],
+                             ["scanpy", "figures_comparison", "workflow_summary"])
+            self.assertTrue((project / "tools/figures_comparison_evidence.py").is_file())
+            self.assertTrue((project / "tools/record_figure_review.py").is_file())
 
     def test_methscan_vmr_subset_does_not_require_methylvi_environment(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -1542,7 +1548,7 @@ class SkillTests(unittest.TestCase):
             self.assertEqual(stage_for_task(task_id), stage, task_id)
         # The run-level summary is unowned: it would otherwise appear in every
         # stage log as though each stage had run it.
-        for task_id in ("workflow_summary", "task_0", "", None):
+        for task_id in ("workflow_summary", "figures_comparison", "task_0", "", None):
             self.assertIsNone(stage_for_task(task_id), repr(task_id))
         # Prefix order: the DMR trainers must not fall through to the broader
         # `methylvi_vmr_` prefix, which would file them under the wrong report.
@@ -1559,7 +1565,7 @@ class SkillTests(unittest.TestCase):
         # The run-level summary is the one task that belongs to no stage: it
         # summarises the whole run, and every stage log showing it would read as
         # though each stage had run it.
-        UNOWNED = {"workflow_summary"}
+        UNOWNED = {"workflow_summary", "figures_comparison"}
         routes = {"scanpy": True, "methscan_vmr": True, "methscan_dmr": True, "allcools": True,
                   "methylvi_allcools": True, "methylvi_vmr": True, "methylvi_vmr_dmr": True}
         tasks = make_tasks(routes, json.loads(json.dumps(DEFAULT_ANALYSIS)))

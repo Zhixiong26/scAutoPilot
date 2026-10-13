@@ -7,3 +7,7 @@ Cell-type DMR requires `review_status: approved`, rejects placeholder labels, an
 `Scripts/Methscan/README.md` documents the stage sequence, output tree, and the `jobs × threads ≤ SLURM_CPUS_PER_TASK` constraint; `Scripts/Methscan/Report.md` is the bilingual evidence ledger. The `run_*.sbatch` wrappers and `submit_methscan_pipeline.sh` execute these stages standalone, sharing one dependency-chain implementation through `Scripts/Common/submit_helpers.sh`.
 
 The heatmap branch may use raw-p fallback only for the known FDR division-by-zero failure. Top-N hypo-DMR heatmaps produce raw mean ratio, DMR-wise z-score, and display-compressed z-score figures. The MethylVI extension instead uses all pooled hypo-DMRs passing configured raw-p and absolute-difference thresholds, without Top-N truncation, and appends only zero-overlap DMRs to selected VMRs.
+
+## Batch comparison
+
+VMR atlas rows use each threshold’s retained cells and verify its own cell QC; they need not equal the pre-VMR filtered cell list. DMR delivery collects and hashes existing heatmaps with explicit zero-DMR outcomes, without reselection or matrix computation. See [batch delivery](figures-comparison.md).

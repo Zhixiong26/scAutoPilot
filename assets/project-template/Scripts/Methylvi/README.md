@@ -138,3 +138,7 @@ variance branch, or BED only with a completed MethSCAn result.
 
 运行前请阅读对应的流程 README。只有在 MethSCAn 结果已完成时，才覆盖 run、
 variance 分支或 BED。
+
+## Batch figure delivery / 同批次图集
+
+New run plans collect this route’s results under `Results/runs/<run-id>/figures_comparison/`. The manifest records source identity and artifact checksums. Ordinary and supervised embeddings are separate; DMR heatmaps are existing verified copies. Stage Reports expose rendering and visual-review status independently of analysis completion.

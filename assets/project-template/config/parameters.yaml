@@ -28,6 +28,13 @@ tools:
 
 artifacts:
 
+  figures_comparison.delivery:
+    produced_by: figures_comparison
+    kind: figure
+    upstream: [scanpy.h5ad, methscan.scanpy_h5ad, methscan.hypodmr_heatmaps, allcools.h5ad, methylvi.embedding]
+    # Existing coordinates/heatmaps only; checksums are bound by task_outputs.
+    # Visual review is separate from the automatic delivery task.
+
   # --- Scanpy 路线 ---------------------------------------------------------
   # 现状：整条路线是单个 `scanpy` 任务，执行器每次整体执行 notebook，没有阶段级
   # 缓存（run_scanpy_notebook.py 内无 cache/invalidate 逻辑）。下面的 DAG 是

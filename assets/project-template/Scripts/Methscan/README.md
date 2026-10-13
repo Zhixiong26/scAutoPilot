@@ -117,3 +117,7 @@ Default inputs are the configured ALLC source directory (example/示例: `Data/A
 `pooled/07_methdiff/samples/<pooled-label>/` uses the pooled label as the sample directory name (example/示例: `CYL_ZCP`). / `pooled/07_methdiff/samples/<pooled-label>/` 以 pooled 标签作为样本目录名（示例/example: `CYL_ZCP`）。
 
 Main-pipeline completion criteria: `run_summary.json` has `status=complete`; the per-sample pairwise/fallback/Top200/matrix/heatmap summaries are complete; the h5ad, UMAP, and matrix of all three VMR branches exist and the cell-ID check passes. The pooled branch is judged independently by `pooled/methdiff.COMPLETE` and `status=complete` in `pooled/07_methdiff/pairwise_summary.json`. Cancelled or failed directories are retained for diagnosis and are not rerun in place by overwriting. / 主流程完成判据：`run_summary.json` 的 `status=complete`，分样本 pairwise/fallback/Top200/matrix/heatmap summary 完成，三个 VMR 分支的 h5ad、UMAP、matrix 均存在且 cell ID 校验通过。pooled 分支独立以 `pooled/methdiff.COMPLETE` 和 `pooled/07_methdiff/pairwise_summary.json` 的 `status=complete` 为准。取消或失败的目录保留用于诊断，不覆盖后重跑。
+
+## Batch figure delivery / 同批次图集
+
+New run plans collect this route’s results under `Results/runs/<run-id>/figures_comparison/`. The manifest records source identity and artifact checksums. Ordinary and supervised embeddings are separate; DMR heatmaps are existing verified copies. Stage Reports expose rendering and visual-review status independently of analysis completion.
