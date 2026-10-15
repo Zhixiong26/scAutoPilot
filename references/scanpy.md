@@ -14,9 +14,31 @@ Annotate by looking the markers up as they are. There is no bundled reference pa
 2. If no complete cell-level reference is available, read `candidate_annotation_audit.tsv`, the per-cluster marker figure, QC, and sample composition. Automatically assign the best-supported biological label to every cluster, looking up unfamiliar markers when needed. Record low confidence and alternatives instead of using `Unassigned`.
 3. Write the proposed mapping and its confidence/evidence into a review worksheet or proposed profile, and write matching `markers.dotplot_markers` and `markers.cell_type_order` groups so the candidate annotation dotplot and legend use the same names.
 4. Deliver the fully coloured candidate UMAP and ask the user to audit the proposals, naming low-confidence or mixed clusters and the evidence behind them. Candidate labels must never be described as user-approved.
-5. After user approval or correction, record the reviewed mapping with `tools/record_annotation_review.py`, set the approval state, and re-run as `run_kind: baseline` with `analysis_confirmed: true`. Formal outputs then carry `cell_type`; only this reviewed baseline may feed cell-type DMR.
+5. After user approval or correction, bind approval to the exact annotation revision and exported cells, and record the reviewed cluster mapping with `tools/record_annotation_review.py`. A requested baseline rerun uses a new run ID, `run_kind: baseline` and `analysis_confirmed: true`; verify its actual partition before applying the mapping. A rerun is optional when the verified, explicitly approved derived cell table is the intended downstream input. See [handoff and review flags](iteration-practice.md#annotation-revisions-and-downstream-handoff) before enabling cell-type DMR.
 
-The profile you record is bound to this run's analysis signature and exact cluster set, so a later parameter change makes it stale and the run refuses it rather than reusing it silently. Cell-type DMR still never consumes an unreviewed table: `NA`, `Unassigned` and `requires_review` remain invalid there, which is why an uncalled cluster has to be resolved rather than parked.
+The profile is bound to this run's analysis signature and exact cluster set. Changes to signature-covered analysis parameters make it stale. Plumbing fields (`run_kind`, `iteration_id`, `analysis_confirmed`) are excluded from that signature; identical signatures and cluster numbers alone cannot prove identical cell membership after a numerical rerun. Cell-type DMR never consumes an unreviewed table: resolve low-confidence/mixed groups explicitly, retaining an inclusion/exclusion ledger for any derived DMR input.
+
+## Candidate reference tool
+
+After completing this run's marker review, write a worksheet with `cluster`,
+`cell_type`, `confidence`, `alternatives`, and `evidence` columns. Every observed
+cluster needs one non-placeholder label and nonempty confidence/evidence. Then:
+
+```bash
+"$PYTHON" "$PROJECT/tools/prepare_scanpy_candidate_reference.py" \
+  --project "$PROJECT" --run-id candidate-000 \
+  --worksheet "$PROJECT/config/candidate-000-proposals.tsv" \
+  --output-dir Data/Annotation/candidate-000-proposals
+```
+
+The tool writes `cell_annotations.tsv` and `provenance.json` in a new directory,
+preserving cell order and marking all labels `agent_proposed_unapproved`. It
+checks source task evidence and exact cluster coverage, keeps marker evidence
+and records input/output hashes. It neither edits project configuration nor
+approves a mapping. If selected as a later candidate's reference, declare the
+table through `annotation.table` with `review_status: pending`; the notebook
+matches cell IDs and measures disagreement against the new partition. Such a
+reference is dependent evidence and cannot validate itself.
 
 `Notebooks/scanpy_workflow.ipynb` is the implementation, not a copy of one: the DAG's scanpy task runs `run_scanpy_notebook.py`, which writes a parameter sidecar and executes that same notebook through a kernel, so there is one code path rather than a notebook and a batch script that must be kept in step. `Scripts/Scanpy/README.md` documents the full ten-step notebook flow, the verification loop, and the completion standard; `Scripts/Scanpy/Report.md` is the bilingual evidence ledger. `Notebooks/example_ipf_scanpy.ipynb` is a shipped worked example that the DAG never executes — including its reviewed cluster-to-cell-type mapping, which is valid only for that example's exact cluster set and must not be transplanted.
 

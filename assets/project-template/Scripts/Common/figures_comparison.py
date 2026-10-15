@@ -122,7 +122,8 @@ def embedding(source, path):
         coordinates = {key: np.asarray(value).copy() for key, value in data.obsm.items()
                        if key.startswith('X_umap')}
         # Only presentation metadata is retained; never load X or training weights.
-        colors = {key: list(value) for key, value in data.uns.items() if key.endswith('_colors')}
+        colors = {key: list(value) for key, value in data.uns.items()
+                  if key.endswith(('_colors', '_display_order', '_display_palette'))}
     finally:
         data.file.close()
     return obs, coordinates, colors
@@ -134,11 +135,22 @@ def palette_for(obs, colors, column, methscan=False):
     import matplotlib.pyplot as plt
     import pandas as pd
     import scanpy as sc
-    from scanpy.plotting._utils import _set_default_colors_for_categorical_obs
     series = obs[column]
     if series.isna().any():
         raise ValueError('missing labels in %s; explicit source annotation required' % column)
-    if methscan:
+    stored_order = colors.get(column + '_display_order')
+    stored_palette = colors.get(column + '_display_palette')
+    if stored_order is not None or stored_palette is not None:
+        if stored_order is None or stored_palette is None or len(stored_order) != len(stored_palette):
+            raise ValueError('source display palette/order mismatch: %s' % column)
+        categories = list(map(str, stored_order))
+        if (not categories or any(not value.strip() for value in categories)
+                or len(categories) != len(set(categories))
+                or not set(series.astype(str)) <= set(categories)):
+            raise ValueError('source display palette lacks unique labels covering observations: %s' % column)
+        palette = [mc.to_hex(x) for x in stored_palette]
+        origin = 'source_display_palette'
+    elif methscan and colors.get(column + '_colors') is None:
         categories = sorted(series.astype(str).unique())
         palette = [mc.to_hex(plt.get_cmap('tab20').colors[i % 20]) for i in range(len(categories))]
         origin = 'source_methscan_sorted_tab20'
@@ -154,8 +166,14 @@ def palette_for(obs, colors, column, methscan=False):
                 raise ValueError('source palette/category length mismatch: %s' % column)
             palette, origin = [mc.to_hex(x) for x in stored], 'source_uns'
         else:
+            # Scanpy renamed this helper in newer releases. Saved palettes do
+            # not need it at all; reconstruct only in the source environment.
+            from scanpy.plotting import _utils
+            set_defaults = getattr(_utils, '_set_default_colors_for_categorical_obs', None)
+            if set_defaults is None:
+                set_defaults = _utils.set_default_colors_for_categorical_obs
             temporary = ad.AnnData(obs=pd.DataFrame({column: series}, index=obs.index))
-            _set_default_colors_for_categorical_obs(temporary, column)
+            set_defaults(temporary, column)
             palette = [mc.to_hex(x) for x in temporary.uns[column + '_colors']]
             origin = 'reconstructed_from_source_scanpy_rule'
     return dict(zip(categories, palette)), categories, {'origin': origin, 'scanpy_version': sc.__version__}

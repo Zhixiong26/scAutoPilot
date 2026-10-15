@@ -10,8 +10,11 @@ import json
 import os
 import re
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Common'))
+from annotation import annotation_row_issue
 
 
 def parse_args():
@@ -60,8 +63,11 @@ def read_metadata(path):
         cell_id = row["cell_id"]
         sample = (row.get("sample_id") or "").strip()
         cell_type = (row.get("rna_cell_type") or "").strip()
-        if not cell_id or not sample or not cell_type or cell_type in {"NA", "Unassigned", "requires_review"}:
+        if not cell_id or not sample or not cell_type:
             continue
+        issue = annotation_row_issue(row, 'rna_cell_type')
+        if issue:
+            raise ValueError('Cell %s is not eligible for cell-type DMR: %s' % (cell_id, issue))
         value = (sample, cell_type)
         if cell_id in cells and cells[cell_id] != value:
             raise ValueError("Conflicting sample/cell type for %s" % cell_id)

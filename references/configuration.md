@@ -21,6 +21,13 @@ data:
 
 `name` is a single path component. Exactly one of `path` (link to a location that already holds the data) or `url` (fetch it) is required. A relative `path` is anchored to the **intake file's directory** rather than the working directory, so one intake links the same targets wherever it is run. A `url` source must carry the sha256 of the finished file: every later stage reads whatever sits at the destination as data, and a truncated transfer is not distinguishable from a complete one by size.
 
+A local-file `path` may also declare `sha256`; generation preserves it and full
+validation checks the linked file. Digests must be 64 hexadecimal characters.
+A directory is not a file checksum target. Quick validation defers file-content
+hashing. Intake structure, source declarations and bundled references are checked
+before creating the destination, so invalid declarations do not leave a partial
+project that blocks the next attempt.
+
 `init_project.py` creates the links during generation and records each entry's resolved target in `config/project.yaml`, so the link can be rebuilt and the origin is part of the input signature. It does not download: a `url` source is left pending, and `tools/link_data.py --project PROJECT --execute` fetches it into a dot-prefixed sibling file, verifies the digest, and only then moves it into place. `link_data.py` without `--execute` reports the plan and changes nothing. It never overwrites an entry it did not create — an existing file or a link to somewhere else means someone has to decide which copy is real. `--only NAME` restricts a run to named entries.
 
 A path that is not visible from the generating host still produces the link; the target may only be mounted in the execution context. `validate_project.py` refuses a link that does not resolve, naming it, so a mount visible on a login node and absent on a compute node fails where the data would have been read rather than inside a stage. `--allow-missing-paths` skips those checks for validating a configuration somewhere the data is not.
@@ -32,6 +39,19 @@ The root README lists every `Data/` entry with its origin, and the root Report r
 `references.chrom_sizes` and `references.blacklist` may be omitted: the skill ships `Supplementary/hg38.canonical.chrom.sizes` and `Supplementary/ENCFF356LFX_GRCh38_blacklist.bed.gz`, copied into every generated project, and `init_project.py` fills in whichever of the two the intake leaves blank and `blacklist_md5` alongside the bundled blacklist. It records that it did so in the generated Report. The bundled files are human hg38, so they are applied only to a human project that declares a methylation route and either no `genome_id` or an hg38 one; a project declaring another organism or genome keeps the preflight failure and is told why, rather than silently inheriting coordinates for the wrong genome. When the intake declares no genome, generation also writes `references.genome_id: GRCh38`, so the recorded genome cannot contradict the files it selected; the Report says the key was inferred rather than declared, because the frozen README renders it as a project fact. Declaring either key in the intake overrides the default for that key alone, and a self-supplied blacklist needs its own `blacklist_md5`.
 
 Annotation uses `table`, `profile`, and `review_status`. `table` is a cell TSV; `profile` is a guarded Scanpy cluster-mapping file (JSON or YAML). Legacy `path` is interpreted only as `table` and emits a warning. Cell-type DMR requires `review_status: approved` and rejects placeholder labels.
+
+DMR also checks per-row `annotation_requires_review`, `requires_review`,
+`review_status`, and `dmr_eligible` when present. Custom identity-column
+normalization preserves these fields. A project-level approval cannot override
+pending rows; write a separately reviewed table as described in
+[iteration practice](iteration-practice.md#annotation-revisions-and-downstream-handoff).
+The boolean `analysis.methscan.use_rna_annotation` defaults to true; false
+disables RNA-annotation-dependent DMR while allowing unsupervised VMR.
+
+The RNA notebook carries manifest `sample_id`, `condition`, and `batch` into
+categorical obs. The configured `analysis.scanpy.group_key` (default `group`)
+uses declared condition; missing metadata remains missing and is never guessed
+from sample names. It cannot overwrite reserved sample or annotation columns.
 
 A profile binds a reviewed mapping to the run it was reviewed from, so it cannot be transplanted onto different parameters or a different cluster set. It holds `analysis_signature` (must equal the signature of the run being planned), `expected_clusters` (must equal that run's cluster set exactly), and `annotations`, which maps each cluster to either a bare label or `{cell_type, confidence, evidence}`. The Scanpy route writes the file for you: `tools/record_annotation_review.py --run-id ID --worksheet review.tsv` prepares a per-cluster worksheet seeded with each cluster's majority label, and the same command with `--mapping review.tsv` records the reviewed result, refusing placeholder labels and any cluster set that does not match the run. The cell-type DMR routes stay unplannable until `review_status` is `approved` as well.
 

@@ -19,7 +19,7 @@ A portable Codex skill for configuration-driven single-cell RNA and DNA-methylat
 
 RNA 输入支持标准 10x filtered matrix 目录、ZIP 和 10x H5。甲基化输入支持逐细胞 `.allc.tsv.gz`，也支持通过显式 glob 选择 ALLCools 风格的 `*_allc.gz`；每个压缩 ALLC 必须具有相邻的 `.tbi`。
 
-本项目不处理原始 FASTQ 或 BAM，也不内置任何物种、基因组、样本名、细胞数、固定节点或用户目录。
+本项目不处理原始 FASTQ 或 BAM，不把示例项目的样本名、细胞数、节点或用户目录作为默认配置。内置的公共 hg38 参考仅在符合条件的人类甲基化项目中启用，并记录来源；其他物种和基因组需要显式配置。
 
 ### 2. 安装
 
@@ -50,7 +50,7 @@ UMAP 绘图统一规范（v0.8.2）：中间候选、审核后 baseline 与发�
 - 系统中具有 `conda` 或 `mamba`；已有兼容分析环境可以复用，没有时由 Skill 创建；
 - Slurm 模式下可以运行 `sinfo`、`scontrol`、`squeue`、`sbatch` 和 `sacct`；
 - 甲基化路线必须显式提供 `chrom_sizes` 和 blacklist；TSS BED 可选。Skill 自动计算 SHA-256，若用户声明期望 checksum，则必须一致；
-- DMR 路线需要 `review_status: approved`、非空且唯一的 `cell_id`、无占位标签的 `cell_type`，且至少两个细胞类型达到配置的最小细胞数。
+- DMR 路线需要 `review_status: approved`、非空且唯一的 `cell_id`、无占位标签的 `cell_type`、已解决的逐行审核/纳入标记，且至少两个细胞类型达到配置的最小细胞数。
 
 Skill 会先只读发现兼容环境。缺失的 Scanpy/ALLCools、MethSCAn 或 MethylVI 环境会在项目 `.environments/` 下隔离创建、验证并写入 `config/environments.tsv`；不会升级或修改已经存在的共享环境。
 
@@ -322,11 +322,34 @@ Scanpy 给出的 cell type 是**候选**；依赖 cell type 的 DMR 路线只有
 
 工具会把该 run 的 `analysis_signature` 与聚类集合一起写进 profile（默认 `config/annotation.yaml`，或 `annotation.profile` 指定的路径），因此改过 `leiden.resolution` 或换了数据后旧 profile 自动失效——**重新审核**，不要把映射搬过去。占位标签（`NA`、`Unassigned`、`requires_review` 等）、覆盖不全的审核表、以及会被覆盖的既有审核表都会被拒绝。记录后还需在 `config/project.yaml` 里设置 `annotation.profile`，并把 `annotation.review_status` 改为 `approved`；两者齐备 DMR 路线才会被规划。
 
-**注释在产出它的那一轮自动完成，不停在 `Unassigned`。** candidate 优先按精确 cell ID 使用项目声明的逐细胞参考注释，输出完整着色的候选 UMAP，并逐 cluster 记录多数标签、纯度、竞争标签和本轮 marker；没有完整参考表时，agent 根据本轮 marker、QC、样本构成和必要的 marker 查证自动提出每个 cluster 的最佳标签。低置信候选仍保留生物学标签，同时显式记录置信度和备选身份。用户审核或修正后，才用上面的工具记录 profile 并以 `baseline` 重跑；未经审核的自动标签不得冒充正式结果或进入 cell-type DMR。详见 [Scanpy 与 Harmony](references/scanpy.md)。
+**注释在产出它的那一轮自动完成，不停在 `Unassigned`。** candidate 优先按精确 cell ID 使用项目声明的逐细胞参考注释，输出完整着色的候选 UMAP，并逐 cluster 记录多数标签、纯度、竞争标签和本轮 marker；没有完整参考表时，agent 根据本轮 marker、QC、样本构成和必要的 marker 查证自动提出每个 cluster 的最佳标签。低置信候选仍保留生物学标签，同时显式记录置信度和备选身份。用户审核或修正后，批准绑定到具体注释版本和逐细胞表；baseline 重跑为可选步骤，经核验的已批准派生表也可在完成覆盖率、review 标记处置及路由验证后交给 DMR。未经审核的自动标签不得冒充正式结果或进入 cell-type DMR。详见 [Scanpy 与 Harmony](references/scanpy.md)。
 
 ### 9.1 Scanpy/UMAP 自动审核迭代 MVP
 
 首版只搜索 `n_pcs`、`n_neighbors`、Leiden `resolution` 和 UMAP `min_dist`，每轮只移动一个离散步长。它分别计算 embedding 与 clustering benchmark，以五个类型化判断生成不可变 round plan；随后由独立工具检查摘要和配置漂移后才把下一候选写入 `analysis.yaml`。默认开发 backend 使用官方 `system-one-adapter` 连接本地 OpenAI-compatible 普通 chat model：固定走 Chat Completions，`structured_outputs=false`，由 prompt 要求 JSON 并在客户端验证。它不是 Jev；未来真实 Jev 使用独立的 `typesafe_jev` backend。未配置本地 endpoint 时结果明确标记为未校准规则 fallback。完整状态、指标、审计和命令见 [自动 Scanpy 审核](references/optimization.md)。
+
+### 9.2 实际项目经验回迁：迭代与画图（0.10.0）
+
+参考 IPF_final 的运行记录与脚本，将可复用的决策方法纳入原始 skill：
+
+- [持续迭代与结果选择](references/iteration-practice.md)：明确当前选用结果、单变量候选、固定评价尺度、失败/降级后端、停止条件及注释版本交接；扩展 MethylVI 无监督诊断方法。自动控制器仍只实现 Scanpy 四轴搜索，其他实验需另建计划任务。
+- [出版图与热图审查](references/publication-figures.md)：固定注释版本和配色、核验坐标未变、明确 marker 表达尺度与比例分母，审查 DMR 缺失值、归一化和分组展示；生成成功与目检通过分开记录。
+- 新增 `tools/prepare_scanpy_candidate_reference.py`：把本轮 marker 工作表转换为未批准的逐细胞参考表，保留置信度、备选身份、marker 证据与来源哈希。生成项目自动携带该工具。
+- 汇总图优先使用源 H5AD 的显式 display order/palette，保留 MethSCAn 已保存颜色；缺失或不一致的显式映射会报错。
+
+本版本更新生成器工具和绘图源码，会改变新生成项目的 `code_signature` / `input_signature`。现有项目只在空闲时升级运行代码，随后创建新计划并验证；既有冻结计划和图件保留。IPF_final 的路径、样本、cluster 映射、过滤阈值及手写控制器不作为通用默认值迁入。
+
+### 9.3 全流程优化（0.11.0）
+
+入口区分新建项目、接续分析、迭代选择和只改图；已有项目先读取配置和运行证据，避免重复生成。此次同时修复执行链中的以下问题：
+
+- **输入与元数据**：本地文件声明的 SHA-256 不再丢失，完整校验会核对；无效 intake/source 声明在创建目录前被拒绝。RNA 输出保留清单中的 sample_id、condition、batch，缺失分组保持缺失。
+- **可比的迭代**：固定按 cell ID 抽样、评价 k 和随机种子，默认最多 5,000 个细胞；修改图的 neighbors 不会同时改变评价尺度。同源聚类推导的注释不作为独立生物学验证。
+- **可恢复的应用**：审核重新核对完成证据，冻结完整配置和来源哈希；会话锁与原子发布避免半轮结果。参数应用保存事务和前后快照，中断后用同一 next-run-id 恢复。停止或要求复核的会话不会被自动继续。
+- **DMR 交接**：统一检查大小写占位标签、逐行待审核状态和 dmr_eligible，列名转换保留审核字段。`analysis.methscan.use_rna_annotation: false` 可暂缓 RNA 注释，保留无监督 VMR，关闭细胞类型 DMR。
+- **画图与审核**：VMR 保存实际显示顺序/配色；没有可用 RNA 注释时不生成误导性的注释图。关闭视觉审核后不再读取图片或计算视觉指标；可选审核失败会明确记为降级。
+
+升级会改变运行代码签名。仅升级空闲项目，重新 validate/plan，并开新迭代会话。旧 round-plan schema v1 只能保留审计，不能由新版直接应用；项目配置仍为 schema v2。详见[升级约定](references/template-maintenance.md)和[迭代流程](references/optimization.md)。本仓库更新不会自动覆盖已生成项目或另行安装的 skill 副本。
 
 ### 10. 测试
 
@@ -490,7 +513,7 @@ Scanpy's cell types are **proposals**. The cell-type DMR routes are planned only
 
 The tool writes the run's `analysis_signature` and cluster set into the profile alongside the labels (to `config/annotation.yaml`, or to `annotation.profile` if it names a path), so a profile recorded for one set of parameters cannot be reused after `leiden.resolution` changes or the data is re-run — review again instead of transplanting the mapping. Placeholder labels (`NA`, `Unassigned`, `requires_review`, and similar), a worksheet that does not cover the run's clusters exactly, and an existing worksheet it would overwrite are all refused. Recording is not enough on its own: set `annotation.profile` in `config/project.yaml` and set `annotation.review_status` to `approved`, and only then do the DMR routes become plannable.
 
-**The first pass auto-annotates; it does not stop at `Unassigned`.** A candidate first uses an explicitly supplied per-cell reference when exact cell IDs cover the analysed cells, recording cluster consensus, purity, disagreements, and current-run markers. Without a complete reference, the agent assigns every cluster from current-run markers, QC, sample composition, and marker references, preserving low confidence and alternatives rather than withholding a label. It then delivers a fully coloured candidate UMAP and asks the user to audit it. Only after approval or correction is the signed profile recorded and the reviewed `baseline` produced; automatic candidate labels never masquerade as formal annotations or feed cell-type DMR. See [Scanpy and Harmony](references/scanpy.md).
+**The first pass auto-annotates; it does not stop at `Unassigned`.** A candidate first uses an explicitly supplied per-cell reference when exact cell IDs cover the analysed cells, recording cluster consensus, purity, disagreements, and current-run markers. Without a complete reference, the agent assigns every cluster from current-run markers, QC, sample composition, and marker references, preserving low confidence and alternatives rather than withholding a label. It delivers a fully coloured candidate UMAP for user review. Approval binds the exact annotation revision and cells. A baseline rerun is optional when a verified approved derived table is the downstream input; coverage, review flags and route validation still apply. Automatic candidate labels never masquerade as formal annotations or feed cell-type DMR. See [Scanpy and Harmony](references/scanpy.md).
 
 See the linked references above for configuration, route-specific behavior, resource selection, troubleshooting, and evidence contracts.
 

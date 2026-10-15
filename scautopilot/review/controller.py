@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
+import importlib.util
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Tuple
@@ -22,6 +26,7 @@ from .visual import (
     verify_observations,
 )
 from .visual_backend import openai_compatible_visual_backend, visual_command_backend
+from optimization_state import exclusive_lock, identifier, mapping
 
 
 class ReviewError(RuntimeError):
@@ -72,8 +77,8 @@ def _digest(value: Mapping[str, Any]) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
-def _find_candidate(project: Path, run_id: str, parameters: Mapping[str, Any]) -> Path:
-    scanpy = project / "Results" / "runs" / run_id / "scanpy"
+def _find_candidate(result: Path, run_id: str, parameters: Mapping[str, Any]) -> Path:
+    scanpy = result / "scanpy"
     iteration = str(parameters.get("iteration_id") or run_id)
     expected = scanpy / "iterations" / iteration / "candidate_analysis.h5ad"
     if expected.is_file():
@@ -114,6 +119,22 @@ def _previous(session_root: Path, current: Mapping[str, Any], epsilon: float) ->
         return None, 0
     prior_state = _load(rounds[-1] / "state.json")
     prior_plan = _load(rounds[-1] / "round_plan.json")
+    if prior_plan.get('status') != 'next_candidate':
+        raise ReviewError('preceding round stopped or requires review; start an explicit new session')
+    applied = _load(rounds[-1] / 'applied.json')
+    if applied.get('next_run_id') != current.get('run_id'):
+        raise ReviewError('candidate is not the run recorded by the preceding applied round')
+    if (prior_state.get('fixed_science') != current.get('fixed_science') or
+            prior_state.get('code_signature') != current.get('code_signature') or
+            prior_state.get('optimization_signature') != current.get('optimization_signature')):
+        raise ReviewError('fixed science, code or optimization policy changed; start a new session')
+    expected_pca = (prior_plan['next_parameters']['n_pcs']
+                    if (prior_plan.get('parameter_diff') or {}).get('parameter') == 'n_pcs'
+                    else prior_state.get('pca_n_comps'))
+    if current.get('pca_n_comps') != expected_pca:
+        raise ReviewError('PCA capacity changed outside the planned logical axis')
+    if prior_state.get('benchmark') != current.get('benchmark'):
+        raise ReviewError('evaluation protocol or sampled cells changed; comparisons require a new session')
     expected = prior_plan.get("next_parameters")
     if prior_plan.get("status") == "next_candidate" and expected != current.get("parameters"):
         raise ReviewError("run parameters do not match the preceding frozen round plan")
@@ -131,8 +152,10 @@ def _previous(session_root: Path, current: Mapping[str, Any], epsilon: float) ->
     }
     # Direction-aware evidence only for the no-improvement safety stop; it is
     # not an optimization score and never merges the two reviewers.
-    improvements = [delta[key] for key in ("trustworthiness", "knn_preservation", "silhouette",
-                                            "celltype_asw", "ilisi") if delta[key] is not None]
+    keys = ['trustworthiness', 'knn_preservation', 'silhouette', 'ilisi']
+    if prior_state['biology'].get('independent') and current['biology'].get('independent'):
+        keys.append('celltype_asw')
+    improvements = [delta[key] for key in keys if delta[key] is not None]
     if delta["davies_bouldin"] is not None:
         improvements.append(-delta["davies_bouldin"])
     improved = any(value > epsilon for value in improvements)
@@ -198,10 +221,8 @@ def _step(grid: list, current: Any, direction: str) -> Optional[Any]:
 def _visual_review(project: Path, candidate: Path, dataset: Mapping[str, Any],
                    settings: Mapping[str, Any]) -> Dict[str, Any]:
     """Run the optional VLM sensor and verify every observation numerically."""
-    figures = collect_visual_figures(candidate, settings)
-    metrics = calculate_visual_metrics(candidate, int(settings.get("max_cells", 20000)))
-    review = {"schema_version": 1, "status": "disabled", "figures": figures,
-              "observations": [], "verification": [], "metrics": metrics,
+    review = {"schema_version": 1, "status": "disabled", "figures": [],
+              "observations": [], "verification": [], "metrics": {},
               "backend_audit": {"requested_backend": "disabled",
                                 "effective_backend": "disabled"},
               "degraded_reason": None}
@@ -209,6 +230,17 @@ def _visual_review(project: Path, candidate: Path, dataset: Mapping[str, Any],
         return review
     required = bool(settings.get("required", False))
     fallback = bool(settings.get("fallback_on_error", True))
+    try:
+        figures = collect_visual_figures(candidate, settings)
+        metrics = calculate_visual_metrics(candidate, int(settings.get("max_cells", 5000)))
+    except (VisualEvidenceError, ValueError, OSError) as exc:
+        if required or not fallback:
+            raise ReviewError(str(exc)) from exc
+        review.update(status='degraded', degraded_reason=str(exc),
+                      backend_audit={'requested_backend': (settings.get('backend') or {}).get('mode'),
+                                     'effective_backend': 'not_run', 'degraded_reason': str(exc)})
+        return review
+    review.update(figures=figures, metrics=metrics)
     if not figures:
         message = "no configured fixed-panel visual figures are available"
         if required:
@@ -249,6 +281,18 @@ def _visual_review(project: Path, candidate: Path, dataset: Mapping[str, Any],
 
 def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, Any]:
     project = Path(project).resolve()
+    identifier(run_id, 'run-id')
+    identifier(session_id, 'session-id')
+    from _common import submit_host_execution_allowed
+    if not submit_host_execution_allowed(run_id):
+        raise ReviewError('Scanpy evidence calculation requires a compute allocation, not a submit host')
+    with exclusive_lock(project / '.workflow/optimization' / session_id / '.lock'):
+        return _review_scanpy_run(project, run_id, session_id)
+
+
+def _review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, Any]:
+    from _common import load_project, load_samples, scanpy_analysis_signature, SCANPY_PLUMBING_KEYS, sha256_file
+    from figures_comparison_evidence import task_evidence
     summary_path = project / ".workflow" / "runs" / run_id / "run_summary.json"
     summary = _load(summary_path)
     if summary.get("status") != "complete":
@@ -257,31 +301,72 @@ def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, 
     if len(scanpy_tasks) != 1 or not scanpy_tasks[0].get("evidence_valid"):
         raise ReviewError("run lacks one completed, evidence-valid Scanpy task")
 
-    config = _load(project / "config" / "optimization.yaml")
+    # Recheck the task now; a cached run_summary alone cannot prove artifacts
+    # still exist or that their task identity matches the frozen plan.
+    run_dir = summary_path.parent
+    source_plan_path = run_dir / 'plan.json'
+    source_plan = _load(source_plan_path)
+    task = next((item for item in source_plan.get('tasks', []) if item['id'] == 'scanpy'), None)
+    if task is None:
+        raise ReviewError('source plan has no Scanpy task')
+    task_evidence(run_dir, source_plan, task)
+    result_root = Path(source_plan['result_dir'])
+    config = mapping(project / "config" / "optimization.yaml")
+    analysis_doc = mapping(project / 'config/analysis.yaml')
     mvp = config.get("scanpy_mvp") or {}
     grids = mvp.get("parameter_grids") or {}
     if set(grids) != set(PARAMETER_IDS):
         raise ReviewError("optimization parameter grids must contain exactly the four MVP parameters")
+    for name, grid in grids.items():
+        if (not isinstance(grid, list) or not grid or
+                any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in grid)
+                or grid != sorted(set(grid))):
+            raise ReviewError('parameter grid must contain unique increasing finite numbers: %s' % name)
     registry = ParameterRegistry.load(project / "config" / "parameters.yaml")
     policy_path = project / "tools" / "scautopilot" / "policy" / "capabilities.json"
     policy = CapabilityPolicy.load(policy_path) if policy_path.is_file() else CapabilityPolicy.load_default()
     registry_ids = [item for group in PARAMETER_IDS.values() for item in group]
     policy.effective_search_space(registry, registry_ids)
 
-    sidecar_path = project / "Results" / "runs" / run_id / "scanpy" / "scanpy_parameters.json"
+    sidecar_path = result_root / "scanpy" / "scanpy_parameters.json"
     sidecar = _load(sidecar_path)
+    if sidecar.get('run_kind') != 'candidate':
+        raise ReviewError('automatic review requires a candidate run')
+    runner_path = project / 'Scripts/Scanpy/run_scanpy_notebook.py'
+    spec = importlib.util.spec_from_file_location('_scautopilot_review_runner', runner_path)
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    resolved = runner.build_parameters(project, load_project(project), load_samples(project, require_paths=False),
+                                       result_root / 'scanpy', run_id)
+    if scanpy_analysis_signature(resolved) != scanpy_analysis_signature(sidecar):
+        raise ReviewError('current analysis config differs from the completed candidate')
     parameters = _current_parameters(sidecar)
-    candidate = _find_candidate(project, run_id, sidecar)
+    for name in grids:
+        _step(grids[name], parameters[name], 'increase')  # validate current values even on accept/stop
+    candidate = _find_candidate(result_root, run_id, sidecar)
+    protected = [source_plan_path, sidecar_path, candidate,
+                 run_dir / 'tasks/scanpy/task_status.json', runner_path,
+                 project / 'config/analysis.yaml', project / 'config/optimization.yaml',
+                 project / 'config/project.yaml', project / 'config/samples.tsv']
+    source_hashes = {str(path): sha256_file(path) for path in protected}
     from .benchmark import calculate_scanpy_benchmarks
+    settings = mvp.get('benchmark') or {}
     benchmark = calculate_scanpy_benchmarks(candidate, parameters,
-                                             int((mvp.get("benchmark") or {}).get("max_cells", 20000)))
+        int(settings.get('max_cells', 5000)), int(settings.get('evaluation_k', 15)),
+        int(settings.get('seed', 0)))
     if max(grids["n_pcs"]) >= min(benchmark["dataset"]["n_cells"], benchmark["dataset"]["n_genes"]):
         raise ReviewError("n_pcs grid is not executable for this dataset's cell/feature dimensions")
     state = {"schema_version": 1, "run_id": run_id, "parameters": parameters,
              "dataset": benchmark["dataset"], "embedding": benchmark["embedding"],
              "clustering": benchmark["clustering"], "biology": benchmark["biology"],
              "batch": benchmark["batch"], "benchmark": benchmark["evaluation"],
-             "evidence": {"run_summary": str(summary_path), "parameters": str(sidecar_path),
+             'fixed_science': _digest({key: value for key, value in sidecar.items()
+                 if key not in SCANPY_PLUMBING_KEYS and key not in
+                 {'n_pcs', 'pca_n_comps', 'n_neighbors', 'leiden_resolution', 'umap_min_dist'}}),
+             'code_signature': source_plan.get('code_signature'),
+             'pca_n_comps': sidecar.get('pca_n_comps'),
+             'optimization_signature': _digest(config),
+             "evidence": {'source_sha256': source_hashes, "run_summary": str(summary_path), "parameters": str(sidecar_path),
                           "candidate_h5ad": str(candidate)}}
 
     session_root = project / ".workflow" / "optimization" / session_id
@@ -355,10 +440,10 @@ def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, 
         reason = "max_iterations"
     elif no_improvement >= max_no_improvement:
         reason = "max_no_improvement"
-    elif accept >= float(threshold_policy.get("accept_threshold", 0.8)):
-        reason = "accepted"
     elif escalate >= float(threshold_policy.get("escalate_threshold", 0.8)) or parameter == "escalate":
         reason = "escalate"
+    elif accept >= float(threshold_policy.get("accept_threshold", 0.8)):
+        reason = "accepted"
     elif parameter == "none" or direction == "keep":
         reason = "no_change"
 
@@ -377,23 +462,33 @@ def review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str, 
                 "no_improvement_streak": no_improvement, "selected_parameter": parameter,
                 "selected_direction": direction, "accept_probability": accept,
                 "escalate_probability": escalate, "backend": judgments["backend"]}
-    plan = {"schema_version": 1, "frozen": True, "session_id": session_id,
+    plan = {"schema_version": 2, "frozen": True, "session_id": session_id,
             "round_id": round_root.name, "parent_run_id": run_id,
             "created_at": datetime.now(timezone.utc).isoformat(), "status": status,
             "current_parameters": parameters, "next_parameters": next_parameters,
             "parameter_diff": diff, "decision": decision,
-            "fixed": mvp.get("fixed") or {}}
+            "fixed": mvp.get("fixed") or {},
+            'analysis_config_digest': _digest(analysis_doc),
+            'optimization_config_digest': _digest(config),
+            'source_sha256': source_hashes}
     plan["plan_digest"] = _digest(plan)
     # Publish a round only after every calculation and policy check succeeds.
     # A backend/schema failure therefore cannot strand a half-written immutable
     # round that changes recovery semantics.
-    _write_immutable(visual_path, visual_review)
-    _write_immutable(state_path, state)
-    _write_immutable(questions_path, request)
-    _write_immutable(round_root / "backend_audit.json", backend_audit)
-    _write_immutable(round_root / "judgments.json", judgments)
-    _write_immutable(round_root / "decision.json", decision)
-    _write_immutable(round_root / "round_plan.json", plan)
+    if source_hashes != {str(path): sha256_file(path) for path in protected}:
+        raise ReviewError('source evidence/config changed during review')
+    attempt = Path(tempfile.mkdtemp(prefix='.round-', dir=session_root))
+    try:
+        for filename, value in [('visual_review.json', visual_review), ('state.json', state),
+                ('questions.json', request), ('backend_audit.json', backend_audit),
+                ('judgments.json', judgments), ('decision.json', decision), ('round_plan.json', plan)]:
+            _write_immutable(attempt / filename, value)
+        if round_root.exists():
+            raise ReviewError('round already exists: %s' % round_root)
+        attempt.rename(round_root)
+    finally:
+        if attempt.exists():
+            shutil.rmtree(attempt)
     return {"session_id": session_id, "round_id": round_root.name, "status": status,
             "reason": reason, "backend": judgments["backend"], "degraded_reason": backend_error,
             "parameter_diff": diff, "round_plan": str(round_root / "round_plan.json")}

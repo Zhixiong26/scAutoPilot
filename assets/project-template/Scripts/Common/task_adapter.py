@@ -11,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict
+from annotation import normalize_annotation_table
 
 # `tools/` holds the packaged runtime modules. Resolving it from this file's own location
 # (Scripts/Common/<this file> -> project root) keeps the adapter runnable when invoked directly,
@@ -106,20 +107,21 @@ def main() -> int:
     mvi = analysis.get("methylvi", {})
     annotation = cfg.get("annotation") or {}
     annotation_table = resolve_path(root, annotation.get("table") or annotation.get("path"))
+    annotation_deferred = args.task.startswith('methscan_') and meth.get('use_rna_annotation', True) is False
+    if annotation_deferred:
+        if args.task in {'methscan_pairwise_dmr', 'methscan_hypo_heatmaps', 'methscan_pooled_dmr'}:
+            raise WorkflowError('cell-type MethSCAn tasks are disabled while RNA annotation is deferred')
+        annotation_table = None
     generated_annotation = result / "annotation.tsv"
-    if annotation_table is None and generated_annotation.is_file():
+    if annotation_table is None and generated_annotation.is_file() and not annotation_deferred:
         annotation_table = generated_annotation
     if annotation_table and annotation_table.is_file() and (
             annotation.get("cell_id_column", "cell_id") != "cell_id"
             or annotation.get("cell_type_column", "cell_type") != "cell_type"):
         normalized = result / "annotation.normalized.tsv"
-        with annotation_table.open(newline="") as source, normalized.open("w", newline="") as target:
-            rows = csv.DictReader(source, delimiter="\t")
-            writer = csv.DictWriter(target, fieldnames=["cell_id", "cell_type"], delimiter="\t", lineterminator="\n")
-            writer.writeheader()
-            for row in rows:
-                writer.writerow({"cell_id": row[annotation.get("cell_id_column", "cell_id")],
-                                 "cell_type": row[annotation.get("cell_type_column", "cell_type")]})
+        normalize_annotation_table(annotation_table, normalized,
+            annotation.get("cell_id_column", "cell_id"),
+            annotation.get("cell_type_column", "cell_type"))
         annotation_table = normalized
     references = cfg.get("references") or {}
     chrom_sizes = resolve_path(root, references.get("chrom_sizes"))
@@ -169,7 +171,7 @@ def main() -> int:
             for row in __import__("_common").load_samples(root) if row["include"] and row["allc_root"]
         ], sort_keys=True),
         "SCMO_SAMPLE_IDS": " ".join(row["sample_id"] for row in __import__("_common").load_samples(root) if row["include"] and row["allc_root"]),
-        "SCMO_ANNOTATION_APPROVED": "1" if annotation.get("review_status") == "approved" else "0",
+        "SCMO_ANNOTATION_APPROVED": "1" if annotation.get("review_status") == "approved" and not annotation_deferred else "0",
         "SCMO_MIN_SITES": str(meth.get("min_sites", 300000)),
         "SCMO_MIN_METH_PERCENT": str(meth.get("min_meth_percent", 50)),
         "SCMO_MAX_METH_PERCENT": str(meth.get("max_meth_percent", 100)),
@@ -236,11 +238,11 @@ def main() -> int:
         record([Path(summary["notebook"]), Path(summary["parameters"]), summary_path,
                 out / "scanpy_workflow_executed.ipynb"]
                + [Path(value) for value in summary.get("artifacts", [])])
-        if annotation_table is None:
+        if annotation_table is None and not annotation_deferred:
             publish_annotation(result, summary)
     elif task == "methscan_select_convert":
         run(["bash", scripts / "Methscan/run_methscan_common.sbatch", meth_root])
-        if annotation_table is None:
+        if annotation_table is None and not annotation_deferred:
             with (meth_root / "00_scanpy_selected/input_manifest.tsv").open(newline="") as handle:
                 selected = list(csv.DictReader(handle, delimiter="\t"))
             with generated_annotation.open("w", newline="") as handle:

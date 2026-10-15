@@ -5,8 +5,11 @@ import argparse
 import csv
 import json
 import re
+import sys
 from collections import Counter
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'Common'))
+from annotation import annotation_row_issue
 
 
 def parse_args():
@@ -123,8 +126,8 @@ def main():
         cell_type = (annotation_row.get("cell_type") or "").strip()
         if not cell_type:
             reason = "missing_scanpy_cell_type"
-        elif args.annotation_approved and cell_type in {args.exclude_cell_type, "NA", "Unassigned", "requires_review"}:
-            reason = "excluded_scanpy_cell_type_%s" % args.exclude_cell_type
+        elif args.annotation_approved and (cell_type == args.exclude_cell_type or annotation_row_issue(annotation_row)):
+            reason = annotation_row_issue(annotation_row) or 'explicitly_excluded_cell_type'
         else:
             reason = None
 
@@ -142,7 +145,7 @@ def main():
             "rna_sample": annotation_row.get("sample", ""),
             "rna_leiden": annotation_row.get("leiden", ""),
             "rna_cell_type": cell_type,
-            "rna_annotation_available": "True",
+            "rna_annotation_available": str(bool(args.annotation_approved)),
         }))
 
     if not selected:

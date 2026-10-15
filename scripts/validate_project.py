@@ -520,7 +520,9 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
         elif plan["state"] == "download" and require_paths:
             errors.append("Data/%s is declared as a download and has not been fetched; run "
                           "`python tools/link_data.py --project . --execute`" % plan["name"])
-        elif plan["state"] == "present" and mode == "full":
+        elif plan['state'] in {'ready', 'present'} and plan.get('sha256') and not Path(plan['destination']).is_file():
+            errors.append('Data/%s declares a file sha256 but is not a regular file' % plan['name'])
+        elif plan["state"] in {"ready", "present"} and plan.get('sha256') and mode == "full":
             # Deferred to full mode: the digest is the only thing that can tell a
             # finished transfer from a truncated one, and it reads the whole file.
             observed = sha256_file(Path(plan["destination"]))
@@ -670,11 +672,17 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
         if label:
             annotated_types[label] = annotated_types.get(label, 0) + 1
     eligible_types = {label: count for label, count in annotated_types.items() if count >= minimum}
-    forbidden = sorted(set(annotated_types) & {"NA", "Unassigned", "requires_review"})
+    sys.path.insert(0, str(files['root'] / 'Scripts/Common'))
+    from annotation import annotation_row_issue
+    issues = [annotation_row_issue(row, type_column) for row in selected_annotation]
+    forbidden = sorted({reason for reason in issues if reason})
     approved = annotation.get("review_status", "unreviewed") == "approved"
-    dmr_ready = bool(allc_samples and annotation_available and approved and len(eligible_types) >= 2 and not forbidden)
+    annotation_enabled = cfg.get('analysis', {}).get('methscan', {}).get('use_rna_annotation', True)
+    if not isinstance(annotation_enabled, bool):
+        errors.append('analysis.methscan.use_rna_annotation must be a boolean')
+    dmr_ready = bool(allc_samples and annotation_available and approved and annotation_enabled is True and len(eligible_types) >= 2 and not forbidden)
     if allc_samples and annotation_available and not dmr_ready:
-        warnings.append("cell-type DMR routes require approved annotation, no placeholder labels, and at least two cell types with >= %d matching cells" % minimum)
+        warnings.append("cell-type DMR routes require approved annotation, no placeholder labels or unresolved row review flags, and at least two cell types with >= %d matching cells; row issues: %s" % (minimum, ', '.join(forbidden) or 'none'))
     routes = {
         "scanpy": bool(all_rna_samples), "methscan_vmr": bool(all_allc_samples), "methscan_dmr": dmr_ready,
         "allcools": bool(all_allc_samples), "methylvi_allcools": bool(all_allc_samples),

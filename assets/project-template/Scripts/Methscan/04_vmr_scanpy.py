@@ -158,9 +158,14 @@ def main():
                     % first
                 )
 
-        extra = extra.drop(
-            columns=[c for c in ("sample_id", "barcode") if c in extra]
-        )
+        # Explicit metadata is authoritative: splitting at the first underscore
+        # loses part of sample IDs such as donor_one.
+        for column in ('sample_id', 'barcode'):
+            if column in extra:
+                obs[column] = extra.loc[obs.index, column]
+                shared = cell_qc.index.intersection(extra.index)
+                cell_qc.loc[shared, column] = extra.loc[shared, column]
+        extra = extra.drop(columns=[c for c in ("sample_id", "barcode") if c in extra])
         obs = obs.join(extra, how="left")
     var = pd.DataFrame(index=pd.Index(regions, name="vmr"))
     var["observed_cell_fraction_after_cell_filter"] = np.mean(np.isfinite(values), axis=0)
@@ -188,7 +193,12 @@ def main():
     summary.to_csv(args.output_dir / "tables" / "sample_cluster_counts.tsv", sep="\t", index=False)
 
     plot_colors = ["sample_id", "leiden"]
-    if "rna_cell_type" in adata.obs:
+    annotation_available = (
+        adata.obs['rna_annotation_available'].astype(str).str.lower().eq('true')
+        if 'rna_annotation_available' in adata.obs
+        else adata.obs.get('rna_cell_type', pd.Series('', index=adata.obs_names)).fillna('').astype(str).ne('')
+    )
+    if "rna_cell_type" in adata.obs and annotation_available.any():
         plot_colors.append("rna_cell_type")
     for color in plot_colors:
         fig, ax = plt.subplots(figsize=(7, 6))
@@ -199,6 +209,9 @@ def main():
         # discrete palette with enough visually distinct colors instead.
         categories = sorted(category_values.unique())
         palette = list(plt.get_cmap("tab20").colors)
+        adata.uns[color + '_display_order'] = categories
+        adata.uns[color + '_display_palette'] = [matplotlib.colors.to_hex(palette[i % len(palette)])
+                                                 for i in range(len(categories))]
         for i, category in enumerate(categories):
             mask = category_values == category
             ax.scatter(
@@ -226,8 +239,8 @@ def main():
         # Labels come from the pre-filter Scanpy whitelist; no second cell-type
         # selection is performed after MethSCAn filtering.
         "rna_annotation_available_cells": int(
-            adata.obs["rna_cell_type"].notna().sum()
-        ) if "rna_cell_type" in adata.obs else None,
+            annotation_available.sum()
+        ),
         "scanpy_version": sc.__version__,
     })
     for key, value in list(parameters.items()):

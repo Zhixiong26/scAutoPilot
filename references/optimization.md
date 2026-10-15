@@ -1,5 +1,11 @@
 # Automatic Scanpy review MVP
 
+For the broader diagnostic/annotation/selection loop and MethylVI comparisons,
+read [evidence-led iteration](iteration-practice.md). This controller implements
+only the four axes below. User-directed changes to QC, cell selection, HVG or
+Harmony belong to a distinct scientific experiment, not an undocumented extra
+axis in an immutable MVP session.
+
 This mode reviews a completed Scanpy candidate, records five typed judgments,
 and freezes at most one parameter change. It never lets a model author Python
 or silently mutate a completed run.
@@ -30,6 +36,18 @@ step; it never invents a continuous value or changes two logical axes.
 An automatic candidate annotation derived from the same Leiden partition is
 marked circular. Its cell-type ASW is recorded for audit but cannot serve as
 independent biological validation. Only an approved independent annotation can.
+The H5AD must explicitly set `uns['annotation_reference_independent'] = true`
+and `uns['annotation_status']` to `approved` or `reviewed`; approval alone does
+not establish independence. Circular cell-type ASW cannot reset the controller's
+no-improvement streak.
+
+The benchmark defaults are `max_cells: 5000`, `evaluation_k: 15`, and `seed: 0`
+under `scanpy_mvp.benchmark`. Cells are selected and ordered by a seeded SHA-256
+of cell ID, so reordering an H5AD does not change the comparison. Evaluation k
+is independent of the candidate graph's `n_neighbors` and is capped for small
+datasets. The protocol and sampled-cell digest must match throughout a session.
+The 5,000-cell cap bounds the quadratic trustworthiness calculation; increasing
+it requires an appropriately sized compute allocation.
 
 The backend must answer a fixed schema: Accept (`Noul`), next parameter
 (`Choice`), direction (`Choice`), quality (`Score`), and escalation (`Noul`).
@@ -92,6 +110,9 @@ exists. The complete record is frozen as `visual_review.json`, while its
 observations, verification, and metrics enter `state.json` under `visual`.
 If the visual backend is optional and unavailable, the state says `degraded` or
 `unavailable`; if it is required, the round fails closed before publication.
+With `enabled: false`, neither image collection nor visual metric calculation
+runs. Optional image/metric failures also record degradation instead of silently
+claiming successful visual verification.
 
 Every artifact the sensor receives is drawn under the embedding-panel standard
 in `references/scanpy.md`: the same 8 × 8 in square exported canvas, 4.0 in single
@@ -106,12 +127,17 @@ The immutable round is stored under
 judgments, `backend_audit.json`, decision, and a signed frozen round plan. From round two onward the
 state includes the previous parameter change and per-metric deltas. A new run
 whose parameters do not match the preceding frozen plan is refused.
+The reviewer rechecks completion evidence and matches current resolved analysis
+parameters to the completed run. The session fixes scientific settings, runtime
+code, optimization policy and evaluation protocol. JSON and YAML configuration
+are both supported. Publication uses a session lock and an atomic directory
+rename; a failed review leaves no partially published `round_NNN`.
 
 ## One iteration
 
 After a candidate run is complete and `inspect_run.py` has produced valid
 evidence, use the project's Scanpy/analysis environment (it must provide
-AnnData, NumPy, and scikit-learn):
+AnnData, NumPy, and scikit-learn) in a compute allocation on Slurm sites:
 
 ```bash
 "$PYTHON" "$PROJECT/tools/review_scanpy_iteration.py" \
@@ -137,7 +163,26 @@ checks the plan digest and config drift, saves before/after configuration
 snapshots, and does not itself execute or submit work. Continue the loop only
 after the next run has complete validated evidence.
 
+Round-plan schema v2 freezes the complete analysis configuration, optimization
+configuration and source hashes. Changes outside the chosen axis are refused,
+including otherwise valid edits made after review. Application holds project
+and session locks, records `apply_pending.json` before changing configuration,
+and writes `applied.json` on success. If interrupted, repeat the same command
+with the same `--next-run-id`; recovery verifies the original snapshots and
+accepts only the exact before/after configuration. Once complete it cannot be
+applied again, and an existing run ID cannot be reused for a new candidate.
+
 Hard stops are independent of the model: 20 rounds, five consecutive rounds
 without objective improvement, the configured accept threshold, an escalation,
 an exhausted grid boundary, or an explicit no-change decision. Submission still
 obeys the normal authorization and scheduler rules.
+Escalation takes precedence over acceptance. A terminal or `review_required`
+round cannot be continued in place; resolve the question and start an explicit
+new session. Retain previous rounds for comparison.
+
+An automatic accept/stop is a controller outcome, not annotation approval or a
+claim of global optimality. Compare candidates using a fixed evaluation k and
+sampling rule; record common-cell versus full-cohort comparisons when populations
+differ. Keep the selected incumbent explicit instead of promoting the latest run.
+Network-only review retries belong in supplemental hash-bound records; never
+overwrite a frozen failed/degraded round or apply its fallback after escalation.

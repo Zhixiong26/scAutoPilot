@@ -1,8 +1,10 @@
-"""Objective Scanpy/UMAP MVP benchmarks used to build the Jev state."""
+"""Objective Scanpy/UMAP benchmarks used to build reviewer evidence."""
 
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+import hashlib
+import json
 
 import numpy as np
 
@@ -46,12 +48,24 @@ def normalized_ilisi(values: np.ndarray, batches: np.ndarray, k: int) -> Optiona
     return float(np.clip((raw - 1.0) / (unique.size - 1.0), 0.0, 1.0))
 
 
-def calculate_scanpy_benchmarks(h5ad_path, parameters: Dict[str, Any], max_cells: int = 20000) -> Dict[str, Any]:
+def calculate_scanpy_benchmarks(h5ad_path, parameters: Dict[str, Any], max_cells: int = 5000,
+                                evaluation_k: int = 15, seed: int = 0) -> Dict[str, Any]:
     import anndata as ad
     from sklearn.manifold import trustworthiness
     from sklearn.metrics import davies_bouldin_score, silhouette_score
 
+    if max_cells < 4 or evaluation_k < 1:
+        raise ValueError('benchmark max_cells must be >=4 and evaluation_k must be positive')
     adata = ad.read_h5ad(str(h5ad_path), backed="r")
+    try:
+        return _calculate(adata, parameters, max_cells, evaluation_k, seed,
+                          trustworthiness, davies_bouldin_score, silhouette_score)
+    finally:
+        adata.file.close()
+
+
+def _calculate(adata, parameters, max_cells, evaluation_k, seed,
+               trustworthiness, davies_bouldin_score, silhouette_score):
     required = {"X_pca_harmony", "X_umap_after_harmony"}
     missing = sorted(required - set(adata.obsm.keys()))
     if missing:
@@ -59,16 +73,23 @@ def calculate_scanpy_benchmarks(h5ad_path, parameters: Dict[str, Any], max_cells
     count = adata.n_obs
     if count < 4:
         raise ValueError("benchmark needs at least four cells")
-    if count > max_cells:
-        rng = np.random.RandomState(0)
-        selected = np.sort(rng.choice(count, max_cells, replace=False))
-    else:
-        selected = np.arange(count)
+    if not adata.obs_names.is_unique:
+        raise ValueError('benchmark cell IDs must be unique')
+    ids = adata.obs_names.astype(str).to_numpy()
+    # Stable by cell ID, so reordering rows cannot change the evaluation sample.
+    selected = np.asarray(sorted(range(count), key=lambda i:
+        hashlib.sha256((str(seed) + '\0' + ids[i]).encode()).digest())[:max_cells])
     n_pcs = min(int(parameters["n_pcs"]), adata.obsm["X_pca_harmony"].shape[1])
     high = np.asarray(adata.obsm["X_pca_harmony"][selected, :n_pcs])
     low = np.asarray(adata.obsm["X_umap_after_harmony"][selected, :])
     obs = adata.obs.iloc[selected]
-    k = min(int(parameters["n_neighbors"]), len(selected) - 1)
+    # Trustworthiness requires k < n/2. Both metrics use the same fixed k;
+    # candidate graph neighborhood size never changes the evaluation protocol.
+    k = min(int(evaluation_k), (len(selected) - 1) // 2)
+    if not np.isfinite(high).all() or not np.isfinite(low).all():
+        raise ValueError('benchmark coordinates must be finite')
+    if 'leiden' not in obs or obs['leiden'].isna().any():
+        raise ValueError('benchmark needs non-missing Leiden labels')
     leiden = obs["leiden"].astype(str).to_numpy()
     cell_type_key = "candidate_cell_type" if "candidate_cell_type" in obs else "cell_type"
     cell_types = obs[cell_type_key].astype(str).to_numpy() if cell_type_key in obs else None
@@ -96,7 +117,9 @@ def calculate_scanpy_benchmarks(h5ad_path, parameters: Dict[str, Any], max_cells
         # evidence but are circular and must not masquerade as independent
         # biological validation.
         "independent": bool(cell_type_key == "cell_type" and
-                            str(adata.uns.get("annotation_status", "")).startswith("approved")),
+                            isinstance(adata.uns.get('annotation_reference_independent'), (bool, np.bool_)) and
+                            adata.uns.get('annotation_reference_independent', False) and
+                            str(adata.uns.get("annotation_status", "")) in {'approved', 'reviewed'}),
     }
     batch = {
         "ilisi": (_safe_metric(normalized_ilisi, high, batches, k) if batches is not None else None),
@@ -108,7 +131,10 @@ def calculate_scanpy_benchmarks(h5ad_path, parameters: Dict[str, Any], max_cells
         "embedding": embedding, "clustering": clustering, "biology": biology, "batch": batch,
         "evaluation": {"n_cells": int(len(selected)), "max_cells": int(max_cells),
                        "n_neighbors": int(k), "representation": "X_pca_harmony",
-                       "embedding": "X_umap_after_harmony", "seed": 0},
+                       "embedding": "X_umap_after_harmony", "seed": int(seed),
+                       "requested_n_neighbors": int(evaluation_k),
+                       "sampling": "cell_id_sha256_v1",
+                       "cell_ids_sha256": hashlib.sha256(json.dumps(ids[selected].tolist()).encode()).hexdigest()},
         "dataset": {"n_cells": int(adata.n_obs), "n_genes": int(adata.n_vars),
                     "n_batches": int(np.unique(batches).size) if batches is not None else 0,
                     "n_celltypes": int(np.unique(cell_types).size) if cell_types is not None else 0},

@@ -395,6 +395,10 @@ def data_sources(block: Any, base: Path) -> List[Dict[str, Any]]:
         entry: Dict[str, Any] = {"name": name, "target": "", "url": "", "sha256": ""}
         if path:
             entry["target"] = str(resolve_path(base, path))
+            entry['sha256'] = str(raw.get('sha256') or '').strip().lower()
+            if entry['sha256'] and not re.fullmatch(r'[0-9a-f]{64}', entry['sha256']):
+                errors.append('data.sources[%s] sha256 must contain 64 hex characters' % name)
+                continue
         else:
             scheme = url.split("://", 1)[0].lower() if "://" in url else ""
             if scheme not in DATA_URL_SCHEMES:
@@ -447,8 +451,8 @@ def stored_data_sources(cfg: Any) -> List[Dict[str, Any]]:
         if entry["target"] and not Path(entry["target"]).is_absolute():
             errors.append("data.sources[%s] target must be an absolute path" % entry["name"])
             continue
-        if entry["url"] and not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"]):
-            errors.append("data.sources[%s] is fetched from a url and therefore requires a 64-hex sha256"
+        if (entry["url"] or entry['sha256']) and not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"]):
+            errors.append("data.sources[%s] requires a valid 64-hex sha256"
                           % entry["name"])
             continue
         entries.append(entry)

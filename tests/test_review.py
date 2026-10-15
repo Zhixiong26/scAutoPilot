@@ -19,6 +19,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from apply_scanpy_round import ApplyError, apply  # noqa: E402
+from optimization_state import digest as config_digest
 from scautopilot.policy import CapabilityPolicy  # noqa: E402
 from scautopilot.provenance import ParameterRegistry  # noqa: E402
 from scautopilot.review.backend import (  # noqa: E402
@@ -239,7 +240,12 @@ class ApplyTests(unittest.TestCase):
                 (project / "config/analysis.yaml").write_text(json.dumps(config))
                 next_parameters = dict(current)
                 next_parameters[parameter] = new_value
-                plan = {"schema_version": 1, "frozen": True, "status": "next_candidate",
+                optimization = json.loads((ROOT / 'assets/project-template/config/optimization.yaml').read_text())
+                (project / 'config/optimization.yaml').write_text(json.dumps(optimization))
+                plan = {"schema_version": 2, "frozen": True, "status": "next_candidate",
+                        'session_id': 's', 'round_id': 'round_000',
+                        'analysis_config_digest': config_digest(config),
+                        'optimization_config_digest': config_digest(optimization),
                         "current_parameters": current, "next_parameters": next_parameters,
                         "parameter_diff": {"parameter": parameter, "old_value": current[parameter],
                                            "new_value": new_value}}

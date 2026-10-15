@@ -20,7 +20,7 @@ Ordinary and label-guided layouts are separate. A supervised summary that legiti
 
 Each atlas provides 600 dpi PNG, vector PDF, preview, and individual 8×8 inch / 300 dpi PNGs through `embedding_plot.save_embedding`. Comparison canvases are an explicit exception to the square-canvas rule. Panels retain equal aspect, a single-column legend and no tight cropping. Pages contain at most three model rows and three columns; large legends split into labelled pages that retain all cells and colours. Every panel has its own source legend; equal cluster numbers in different models do not assert a shared cell identity.
 
-Palette precedence is saved uns colours, source run settings, then reconstruction using the source plotting rule in the declared Scanpy environment. The manifest records the origin and version; it never labels a reconstructed palette as a stored original. MethSCAn uses its sorted-category tab20 rule. Inconsistent saved palettes fail validation.
+Palette precedence is explicit `uns[column + '_display_order']` with `uns[column + '_display_palette']`, saved categorical `uns` colours, source run settings, then reconstruction using the source plotting rule in the declared Scanpy environment. Explicit display metadata is stored as parallel arrays so labels containing `/` are safe in HDF5. The manifest records the origin and version; it never labels a reconstructed palette as a stored original. MethSCAn's sorted-category tab20 rule is a fallback when no stored palette exists. Incomplete/duplicate display orders, uncovered labels and inconsistent saved palettes fail validation.
 
 `panel_composition.tsv` has panel-specific counts and fractions. `source_index.tsv` records logical/resolved paths, checksums and source task/run identity. `delivery_manifest.json` records the signed plan, model list, parameters, annotation status, palette, coordinates, cell sets and checksums of every delivered artifact. `task_outputs.json` binds the manifest digest and the complete file set. Inspecting or resuming a run validates these artifact hashes; missing or changed output cannot remain complete. Source derived-file hashes are rechecked during rendering and recovery, without rescanning the raw inputs.
 
@@ -33,6 +33,11 @@ Rendering takes an advisory per-run publisher lock and writes a unique sibling a
 Default sources must resolve within this run. A deliberate cross-run link additionally requires `analysis.figures_comparison.source_runs.<current-task>: {run_id: <source-run>, task_id: <source-task>}` before planning. The source must have valid evidence under its own frozen plan and matching task parameters. This registers provenance for an already valid current task; it does not create a cached task or skip scientific work. Unregistered redirected links fail closed.
 
 ## Visual review
+
+For additional publication panels, composition denominators, marker-expression
+scales and DMR matrix audits, read [publication figures](publication-figures.md).
+Those derived revisions preserve the original delivery. Collecting existing DMR
+rasters does not perform the matrix audit or produce a balanced heatmap.
 
 `run_summary.json` distinguishes `analysis_status`, `figure_delivery_status` and `visual_review_status`. The ordinary run `status` describes automatic DAG completion. `rendered_verified` means file verification, not visual or biological approval. Stage reports also show the run-level delivery state, separately from stage task counts.
 

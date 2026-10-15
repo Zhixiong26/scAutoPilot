@@ -11,6 +11,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
+from optimization_state import exclusive_lock, identifier, mapping, digest as config_digest
+from _common import sha256_file
 
 
 class ApplyError(RuntimeError):
@@ -43,6 +45,14 @@ def atomic_json(path: Path, value: Dict[str, Any]) -> None:
 
 def apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> Dict[str, Any]:
     project = project.resolve()
+    for name, value in [('session-id', session_id), ('round-id', round_id), ('next-run-id', next_run_id)]:
+        identifier(value, name)
+    with exclusive_lock(project / '.workflow/optimization/.apply.lock'):
+        with exclusive_lock(project / '.workflow/optimization' / session_id / '.lock'):
+            return _apply(project, session_id, round_id, next_run_id)
+
+
+def _apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> Dict[str, Any]:
     round_root = project / ".workflow" / "optimization" / session_id / round_id
     plan_path = round_root / "round_plan.json"
     plan = load(plan_path)
@@ -50,19 +60,63 @@ def apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> Di
         raise ApplyError("round plan digest does not match its contents")
     if not plan.get("frozen") or plan.get("status") != "next_candidate":
         raise ApplyError("round is not a frozen next_candidate plan")
+    if plan.get('schema_version') != 2 or not plan.get('analysis_config_digest'):
+        raise ApplyError('legacy round lacks a complete config binding; review in a new session')
+    if plan.get('session_id') != session_id or plan.get('round_id') != round_id:
+        raise ApplyError('round identity differs from its location')
     applied_path = round_root / "applied.json"
     if applied_path.exists():
         raise ApplyError("round was already applied: %s" % applied_path)
     diff = plan.get("parameter_diff") or {}
     if diff.get("parameter") not in {"n_pcs", "n_neighbors", "resolution", "min_dist"}:
         raise ApplyError("round does not contain one legal MVP parameter change")
+    current = plan['current_parameters']
+    expected = dict(current)
+    expected[diff['parameter']] = diff.get('new_value')
+    if (set(current) != {'n_pcs', 'n_neighbors', 'resolution', 'min_dist'} or
+            diff.get('old_value') != current[diff['parameter']] or
+            expected != plan.get('next_parameters') or expected == current):
+        raise ApplyError('round diff and next_parameters disagree or change more than one axis')
+    if next_run_id == plan.get('parent_run_id') or (project / '.workflow/runs' / next_run_id).exists() or (
+            project / 'Results/runs' / next_run_id).exists():
+        raise ApplyError('next-run-id must identify a new run')
 
     analysis_path = project / "config" / "analysis.yaml"
-    document = load(analysis_path)
+    document = mapping(analysis_path)
+    optimization = mapping(project / 'config/optimization.yaml')
+    if config_digest(optimization) != plan.get('optimization_config_digest'):
+        raise ApplyError('optimization policy drifted from the frozen round')
+    grid = optimization['scanpy_mvp']['parameter_grids'][diff['parameter']]
+    try:
+        old_index, new_index = grid.index(diff['old_value']), grid.index(diff['new_value'])
+    except ValueError as exc:
+        raise ApplyError('round change is outside the frozen grid') from exc
+    if abs(new_index - old_index) != 1:
+        raise ApplyError('round must move one adjacent grid step')
+    for path, expected_sha in (plan.get('source_sha256') or {}).items():
+        if Path(path) != analysis_path and sha256_file(Path(path)) != expected_sha:
+            raise ApplyError('source evidence changed: %s' % path)
+
+    pending_path = round_root / 'apply_pending.json'
+    if pending_path.exists():
+        pending = load(pending_path)
+        if pending.get('next_run_id') != next_run_id or pending.get('plan_digest') != plan['plan_digest']:
+            raise ApplyError('incomplete application belongs to another run/plan')
+        before = load(round_root / 'analysis_before.json')
+        after = load(round_root / 'analysis_after.json')
+        if (config_digest(before) != pending['analysis_before_sha256'] or
+                config_digest(after) != pending['analysis_after_sha256']):
+            raise ApplyError('application recovery snapshots were modified')
+        if config_digest(document) not in {config_digest(before), config_digest(after)}:
+            raise ApplyError('config drifted during interrupted application')
+        atomic_json(analysis_path, after)
+        atomic_json(applied_path, pending)
+        return pending
+    if config_digest(document) != plan['analysis_config_digest']:
+        raise ApplyError('analysis.yaml has drifted from the complete frozen configuration')
     scanpy = (document.get("analysis") or {}).get("scanpy")
     if not isinstance(scanpy, dict):
         raise ApplyError("analysis.yaml lacks analysis.scanpy")
-    current = plan["current_parameters"]
     observed = {
         "n_pcs": scanpy["neighbors"]["n_pcs"],
         "n_neighbors": scanpy["neighbors"]["n_neighbors"],
@@ -88,12 +142,13 @@ def apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> Di
     record = {"schema_version": 1, "applied_at": datetime.now(timezone.utc).isoformat(),
               "plan": str(plan_path), "plan_digest": plan["plan_digest"],
               "next_run_id": next_run_id, "parameter_diff": diff,
-              "analysis_before_sha256": hashlib.sha256(
-                  (json.dumps(before, sort_keys=True, separators=(",", ":"))).encode("utf-8")).hexdigest()}
+              "analysis_before_sha256": config_digest(before),
+              "analysis_after_sha256": config_digest(document)}
     # Save auditable before/after snapshots beside the immutable decision, then
     # publish the project config and the applied marker atomically.
     atomic_json(round_root / "analysis_before.json", before)
     atomic_json(round_root / "analysis_after.json", document)
+    atomic_json(pending_path, record)
     atomic_json(analysis_path, document)
     atomic_json(applied_path, record)
     return record

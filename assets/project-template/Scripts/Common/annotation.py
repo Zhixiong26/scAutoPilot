@@ -2,16 +2,47 @@
 """Pure annotation-profile guard used by analysis stages and tests."""
 
 
-# Labels that name the absence of a cell type rather than a cell type. The analysis stages each
-# carry their own inline copy of the narrower subset they skip when reading metadata
-# (Scripts/Methscan/01_select_scanpy_cells.py, 07_methdiff_celltype.py, and the supervised UMAP in
-# Scripts/Methylvi/shared/05_plot_supervised_umap.py); this is the superset a human review must not
-# be able to record as a cell type, because pooling or dropping those cells is not what the label
-# says. Compared case-insensitively.
+# Shared by preflight and MethSCAn selection/DMR. Compared case-insensitively;
+# descriptive biological labels still require explicit review disposition.
 PLACEHOLDER_LABELS = frozenset({
     "", "na", "nan", "none", "n/a", "unknown", "unannotated", "unassigned",
     "requires_review", "requires review",
 })
+
+
+def normalize_annotation_table(source, target, cell_column, type_column):
+    """Rename configured identity columns without discarding per-row review evidence."""
+    import csv
+    with source.open(newline='') as handle:
+        reader = csv.DictReader(handle, delimiter='\t')
+        columns = list(reader.fieldnames or ())
+        if cell_column not in columns or type_column not in columns:
+            raise ValueError('annotation table lacks configured identity columns')
+        fields = ['cell_id', 'cell_type'] + [key for key in columns
+            if key not in {cell_column, type_column, 'cell_id', 'cell_type'}]
+        with target.open('w', newline='') as sink:
+            writer = csv.DictWriter(sink, fieldnames=fields, delimiter='\t', lineterminator='\n')
+            writer.writeheader()
+            for row in reader:
+                record = {key: row.get(key, '') for key in fields}
+                record.update(cell_id=row[cell_column], cell_type=row[type_column])
+                writer.writerow(record)
+
+
+def annotation_row_issue(row, type_column='cell_type'):
+    """Return a reason an annotated row cannot enter cell-type DMR."""
+    label = str(row.get(type_column) or '').strip()
+    if label.lower() in PLACEHOLDER_LABELS:
+        return 'placeholder_cell_type'
+    for flag in ('annotation_requires_review', 'requires_review'):
+        if str(row.get(flag) or '').strip().lower() not in {'', '0', 'false', 'no'}:
+            return 'unresolved_' + flag
+    status = str(row.get('review_status') or '').strip().lower()
+    if status and status not in {'approved', 'reviewed', 'user_approved'}:
+        return 'unapproved_row_review_status'
+    if 'dmr_eligible' in row and str(row['dmr_eligible']).strip().lower() not in {'1', 'true', 'yes'}:
+        return 'not_dmr_eligible'
+    return None
 
 
 def evaluate_annotation_profile(observed_clusters, analysis_signature, profile, unassigned="Unassigned"):

@@ -255,6 +255,52 @@ class SkillTests(unittest.TestCase):
             self.assertEqual(len(result["allc_validation"]), 2)
             annotation.write_text("cell_id\tcell_type\nS1_AAAC-1\tTypeA\nS1_AAAG-1\tUnassigned\n")
             self.assertFalse(validate(project)["routes"]["methscan_dmr"])
+            for label, flag, row_status in [('unassigned', 'false', 'approved'),
+                                           ('TypeB', 'true', 'approved'),
+                                           ('TypeB', 'false', 'agent_proposed_unapproved')]:
+                annotation.write_text('cell_id\tcell_type\tannotation_requires_review\treview_status\n'
+                    'S1_AAAC-1\tTypeA\tfalse\tapproved\n'
+                    'S1_AAAG-1\t%s\t%s\t%s\n' % (label, flag, row_status))
+                self.assertFalse(validate(project)['routes']['methscan_dmr'])
+            annotation.write_text('cell_id\tcell_type\tannotation_requires_review\treview_status\n'
+                'S1_AAAC-1\tTypeA\tfalse\tapproved\nS1_AAAG-1\tTypeB\tfalse\tapproved\n')
+            self.assertTrue(validate(project)['routes']['methscan_dmr'])
+            analysis['analysis']['methscan']['use_rna_annotation'] = False
+            (project / 'config/analysis.yaml').write_text(json.dumps(analysis))
+            deferred = validate(project)
+            self.assertFalse(deferred['routes']['methscan_dmr'])
+            self.assertTrue(deferred['routes']['methscan_vmr'])
+
+    def test_declared_local_source_checksum_is_preserved_and_verified(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = root / 'source.tsv'
+            source.write_text('verified input')
+            checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+            def intake_config(intake):
+                intake['data'] = {'sources': [{'name': 'reference.tsv', 'path': str(source), 'sha256': checksum}]}
+            project = self.generate(root, 'rna', mutate=intake_config)
+            config = load_project(project)
+            self.assertEqual(config['data']['sources'][0]['sha256'], checksum)
+            self.assertEqual(validate(project, mode='full')['status'], 'valid')
+            source.write_text('altered input')
+            result = validate(project, mode='full')
+            self.assertEqual(result['status'], 'invalid')
+            self.assertIn('not the declared', ' '.join(result['errors']))
+
+    def test_invalid_intake_does_not_leave_a_partial_project(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            intake = root / 'intake.json'
+            output = root / 'project'
+            for payload in [{'schema_version': 2}, {'schema_version': 2, 'project_id': 'test',
+                    'data': {'sources': [{'name': 'bad', 'path': 'missing', 'sha256': 'invalid'}]}}]:
+                intake.write_text(json.dumps(payload))
+                result = subprocess.run([sys.executable, str(ROOT / 'scripts/init_project.py'),
+                    '--intake', str(intake), '--output', str(output)], capture_output=True, text=True)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertFalse(output.exists())
 
     # --- ALLC full-validation fan-out ---------------------------------------
     #
@@ -1069,11 +1115,18 @@ class SkillTests(unittest.TestCase):
         def declare_partitions(intake):
             intake["scheduler"]["partitions"] = ["cpu"]
 
+        def fixture_command(command, _path=None):
+            # Exercise resource selection without depending on today's live
+            # partitions, queue or capacity of the machine running the tests.
+            filename = {'sinfo': 'sinfo.txt', 'scontrol': 'scontrol.txt', 'squeue': 'squeue.txt'}[command[0]]
+            return (ROOT / 'tests/fixtures' / filename).read_text()
+
         with tempfile.TemporaryDirectory() as temp:
             project = self.generate(Path(temp), "rna", mutate=declare_partitions)
             subprocess.check_call([sys.executable, str(ROOT / "scripts" / "plan_workflow.py"),
                                    "--project", str(project), "--routes", "auto", "--run-id", "unit"])
-            with mock.patch.dict(os.environ, {"SCMO_HOST_ROLE": "submit"}):
+            with mock.patch.dict(os.environ, {"SCMO_HOST_ROLE": "submit"}), \
+                    mock.patch('inspect_resources.command_output', side_effect=fixture_command):
                 result = submit(project, "unit", dry_run=True)
             self.assertEqual(result["status"], "dry_run")
             self.assertEqual(result["backend_effective"], "slurm")

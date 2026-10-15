@@ -31,6 +31,8 @@ RUNTIME_TOOLS = (
     "review_scanpy_iteration.py", "apply_scanpy_round.py", "system_one_adapter_runner.py",
     "visual_vlm_runner.py",
     "figures_comparison_evidence.py", "record_figure_review.py",
+    "prepare_scanpy_candidate_reference.py",
+    "optimization_state.py",
 )
 
 # Reference files the skill ships so a methylation project needs no reference
@@ -80,6 +82,7 @@ DEFAULT_ANALYSIS = {
         ],
     },
     "methscan": {
+        "use_rna_annotation": True,
         "min_sites": 300000, "min_meth_percent": 50, "max_meth_percent": 100,
         "smooth_bandwidth": 1000, "scan_bandwidth": 2000, "scan_stepsize": 100,
         "vmr_thresholds": [0.01, 0.02, 0.05], "min_cells": 6,
@@ -708,8 +711,18 @@ def main() -> int:
                         help="declare data.sources without creating the Data/ links they describe")
     args = parser.parse_args()
     intake = load_structured(args.intake)
+    if not isinstance(intake, dict):
+        raise WorkflowError('intake must be a mapping')
     if intake.get("schema_version") not in {1, 2}:
         raise WorkflowError("intake schema_version must be 1 or 2")
+    project_id = str(intake.get('project_id') or '').strip()
+    if not project_id:
+        raise WorkflowError('project_id is required')
+    # Resolve declarations before copying files: invalid intake must not leave a
+    # nonempty project directory that the next corrected generation refuses.
+    entries = data_sources(intake.get('data'), args.intake.resolve().parent)
+    references, reference_notes, reference_warnings = bundled_references(
+        intake.get('references'), intake.get('organism'), intake.get('samples'))
     output = args.output.resolve()
     if output.exists() and any(output.iterdir()):
         raise WorkflowError("refusing non-empty output directory: %s" % output)
@@ -730,14 +743,8 @@ def main() -> int:
         ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
     )
 
-    project_id = str(intake.get("project_id", "")).strip()
-    if not project_id:
-        raise WorkflowError("project_id is required")
     # A relative data.sources path is anchored to the intake file, so the same
     # intake links the same targets regardless of the directory it is run from.
-    entries = data_sources(intake.get("data"), args.intake.resolve().parent)
-    references, reference_notes, reference_warnings = bundled_references(
-        intake.get("references"), intake.get("organism"), intake.get("samples"))
     project_cfg = {
         "schema_version": 2,
         "project": {

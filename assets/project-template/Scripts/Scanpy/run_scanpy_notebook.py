@@ -145,9 +145,14 @@ def build_parameters(root: Path, cfg: Dict[str, Any], samples: List[Dict[str, An
         if label in inputs:
             raise RunnerError("two included samples share the cell_id_prefix %s; RNA cell IDs "
                               "would collide and could not be joined with ALLC cell IDs" % label)
-        inputs[label] = {"path": row["rna_path"], "format": row["rna_format"]}
+        inputs[label] = {"path": row["rna_path"], "format": row["rna_format"],
+                         'metadata': {key: str(row.get(key) or '').strip()
+                                      for key in ('sample_id', 'condition', 'batch')}}
     if not inputs:
         raise RunnerError("no included RNA sample to analyse")
+    group_key = str(analysis.get('group_key') or DEFAULTS['group_key'])
+    if group_key in {'cohort', 'sample', 'sample_id', 'batch', 'leiden', 'cell_type', 'candidate_cell_type'}:
+        raise RunnerError('scanpy.group_key would overwrite a reserved observation column: %s' % group_key)
 
     palette = [str(value) for value in (analysis.get("sample_palette") or DEFAULT_PALETTE)]
     if len(palette) < len(inputs):

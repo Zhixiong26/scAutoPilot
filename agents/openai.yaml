@@ -1,6 +1,6 @@
 interface:
   display_name: "Single-cell Multiomics Analysis"
-  short_description: "Portable RNA and methylome workflows"
-  default_prompt: "Use $scautopilot to configure, validate, schedule, optimize, and document a portable single-cell multiomics workflow."
+  short_description: "RNA/methylome analysis, iteration and figures"
+  default_prompt: "Use $scautopilot to configure, validate, run and iteratively review a portable single-cell multiomics analysis, preserving annotation provenance and delivering verified figures."
 policy:
   allow_implicit_invocation: true

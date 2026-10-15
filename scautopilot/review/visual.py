@@ -130,12 +130,20 @@ def _label_components(neighbors: np.ndarray, labels: np.ndarray) -> Dict[str, Li
     return {label: sorted(counts.values(), reverse=True) for label, counts in grouped.items()}
 
 
-def calculate_visual_metrics(h5ad_path: Path, max_cells: int = 20000, seed: int = 0) -> Dict[str, Any]:
+def calculate_visual_metrics(h5ad_path: Path, max_cells: int = 5000, seed: int = 0) -> Dict[str, Any]:
     """Calculate metrics that can confirm or refute bounded visual observations."""
     import anndata as ad
-    from sklearn.neighbors import NearestNeighbors
-
+    if max_cells < 4:
+        raise VisualEvidenceError('visual max_cells must be at least four')
     adata = ad.read_h5ad(str(h5ad_path), backed="r")
+    try:
+        return _calculate_visual_metrics(adata, max_cells, seed)
+    finally:
+        adata.file.close()
+
+
+def _calculate_visual_metrics(adata, max_cells, seed):
+    from sklearn.neighbors import NearestNeighbors
     if "X_umap_after_harmony" not in adata.obsm:
         raise VisualEvidenceError("candidate H5AD lacks X_umap_after_harmony")
     count = int(adata.n_obs)
@@ -150,8 +158,12 @@ def calculate_visual_metrics(h5ad_path: Path, max_cells: int = 20000, seed: int 
     obs = adata.obs.iloc[selected]
     k = min(15, len(selected) - 1)
     distances, indices = NearestNeighbors(n_neighbors=k + 1).fit(values).kneighbors(values)
-    neighbors = indices[:, 1:]
-    nearest = distances[:, 1]
+    # Duplicate coordinates can put self anywhere in a tied neighbor list.
+    # Remove by index, not by dropping the first entry.
+    pairs = [[(distance, other) for distance, other in zip(row_dist, row_idx) if other != index][:k]
+             for index, (row_dist, row_idx) in enumerate(zip(distances, indices))]
+    neighbors = np.asarray([[other for _, other in row] for row in pairs], dtype=int)
+    nearest = np.asarray([row[0][0] for row in pairs])
 
     sample_key = "sample" if "sample" in obs else "cohort" if "cohort" in obs else None
     sample_enrichment = None

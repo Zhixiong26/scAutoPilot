@@ -17,3 +17,12 @@ The validator currently includes all notebooks under `Scripts/` and `tools/`, in
 Standalone Slurm wrappers are packaged alongside the run DAG so a stage can be explored, smoke-tested, or recovered without a plan. Each wrapper must resolve resources from a named scheduler profile, carry no `#SBATCH` site directive and no absolute site path, and never stand in for a run's completion evidence.
 
 Figure delivery adds signed runtime tools and changes the default DAG. Upgrade only idle generated projects, then plan a new run and validate it. Never modify active/frozen plans in place. Runtime distribution includes figures_comparison_evidence.py and record_figure_review.py; generated projects do not import the installed skill. See [delivery contract](figures-comparison.md).
+
+Version 0.11.0 changes runtime signatures (metadata transfer, annotation gates,
+benchmarking and iteration transactions). Include `optimization_state.py` and
+the review package when distributing runtime tools. Project configuration remains
+schema v2; optimization **round plans** now use schema v2 as a separate artifact
+format. Older rounds remain audit records, but the new applier refuses schema-v1
+rounds because they lack complete configuration/source bindings. Revalidate the
+idle upgraded project, produce evidence under a new plan, and start a new review
+session. Do not retrofit hashes or approval into a frozen old round.

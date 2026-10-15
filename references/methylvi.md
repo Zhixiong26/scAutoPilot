@@ -17,3 +17,13 @@ The packaged `run.sh` runners and `slurm/*.sbatch` wrappers execute one stage wi
 ## Batch comparison
 
 Native ALLCools UMAP/L1 and MethylVI UMAP/methylVI_leiden are distinct deliveries. MethylVI ordinary and supervised views use separate atlases. A valid supervised skip retains ordinary figures and records a reason; missing expected coordinates fail. See [batch delivery](figures-comparison.md).
+
+## Diagnose and iterate
+
+For retained-model comparisons, read [MethylVI unsupervised iteration](iteration-practice.md#methylvi-unsupervised-iteration).
+Audit coverage, depth, sample effects and seed stability before changing the
+model. Resolution-only candidates preserve the latent representation and graph;
+neighbors-only candidates preserve the latent representation. Label purity can
+increase merely through splitting; RNA references and supervised UMAP separation
+are not independent validation. Extra model searches require their own planned
+tasks; the packaged automatic review controller covers Scanpy only.

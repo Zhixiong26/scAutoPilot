@@ -1,58 +1,135 @@
 ---
 name: scautopilot
-description: Generate, validate, schedule, monitor, and document portable single-cell RNA and DNA-methylation projects using Scanpy/Harmony, MethSCAn, ALLCools, and MethylVI. Use for configuration-driven project creation or execution from 10x RNA matrices and per-cell indexed ALLC data; do not use for raw FASTQ/BAM processing.
+description: Create, execute, iteratively review, and plot portable single-cell RNA and DNA-methylation projects with Scanpy/Harmony, MethSCAn, ALLCools, and MethylVI. Use with 10x matrices and indexed per-cell ALLC, including existing-project continuation, candidate annotation and publication figures; not raw FASTQ/BAM processing.
 ---
 
 # scAutoPilot
 
-Create auditable projects from user-supplied data without assuming sample names, paths, cell counts, genome builds, environments, or cluster annotations. Use the bundled generator and templates instead of copying paths from a previous project.
+Build auditable analyses from explicit inputs and preserve the evidence needed to
+choose a result. Use the maintained generator and runtime tools; a previous
+study supplies lessons, not default sample identities, parameters or approval.
 
-## Operating contract
+## Start from the requested work
 
-1. Read [intake and configuration](references/configuration.md), then create an intake YAML with explicit sample metadata, inputs, genome resources, any known environments, and scheduler site policy. Declare where the user's data already lives under `data.sources`; do not point `config/` at a path outside the project.
-2. Generate a new project with `scripts/init_project.py`. Never generate into a non-empty directory. Generation links each declared source into the project's own `Data/`; a `url` source is fetched by `tools/link_data.py --execute`, which verifies its sha256.
-3. Read [environment provisioning](references/environments.md). Discover compatible existing environments first. If a required environment is unavailable, use `tools/bootstrap_environments.py --execute` to create a new isolated project environment, verify it, and update `config/environments.tsv`.
-4. Run quick validation before planning and immediately before submission. A matching full-validation record is required for first production use or changed inputs/schema/template. A full ALLC validation distributes itself: it splits the files into byte-balanced chunks, submits one job per chunk to compute nodes, and merges the results fail-closed, so it belongs on a host that can submit and takes as long as reading the inputs takes. Nothing is read unless the selected routes include a methylation route, and `inspect_run.py` reports the ALLC counts beside the verdict so that case is visible rather than implicit. `--skip-full-validation` submits without the evidence and records that it did. Missing inputs, indexes, required references, declared-checksum matches, route-used environments, or route prerequisites are blockers; an explicit route subset must not require unrelated stages.
-5. Read the relevant workflow reference before adapting task commands: [Scanpy](references/scanpy.md), [MethSCAn](references/methscan.md), or [ALLCools/MethylVI](references/methylvi.md). A Scanpy pass must deliver a complete automatic candidate annotation, not stop at `Unassigned`. Prefer a supplied cell-level reference table when it covers the analysed cells; otherwise infer every cluster from this run's ranked markers, relevant marker references, QC, and sample composition. Record confidence and competing identities rather than withholding a label. Save the proposed mapping, render the annotated candidate UMAP, and then ask the user to audit it. Only a user-reviewed mapping may become an approved baseline or feed cell-type DMR. See [Scanpy](references/scanpy.md) for the loop.
-6. Build a distinct run DAG with `scripts/plan_workflow.py`. Results belong under `Results/runs/<run-id>/`; reuse a run ID only to resume its matching signed plan.
-   For the four-axis Scanpy optimization MVP, read [automatic Scanpy review](references/optimization.md). Review only completed evidence-valid candidates, freeze one typed decision round, and materialize it separately before planning the next run.
-7. For execution, read [scheduler and execution](references/execution.md). Submit only when the user requested execution. Every task must pass a fresh resource inspection immediately before its `sbatch`; a prior snapshot is not reusable. Never execute a planned task on a login node: inspect the compute nodes' resources and submit, and let the login node do only planning, validation, submission, inspection, and reporting.
-8. Judge completion from validated outputs, task completion markers, and `run_summary.json`, not from submission success or Slurm state alone.
-9. Keep the root README as the stable contract: `init_project.py` writes it once from the intake and the resolved configuration, and nothing ever rewrites it with runtime state. Every `inspect_run.py` refreshes that run's concise record in the root Report's run log *and* in each touched stage Report's own log, so the record a reader of `Scripts/Scanpy/Report.md` sees is the same evidence filtered to Scanpy's tasks. `update_report.py` rebuilds the root log and every stage log from `.workflow/runs/*/run_summary.json` after pruning, migration, or hand edits. The stage READMEs and the prose around the stage logs are generated-once text; `init_project.py` binds them to the project at generation and no run rewrites them.
+| Request | First action and reference |
+|---|---|
+| New project | Read [configuration](references/configuration.md), resolve intake metadata and inputs, then use `scripts/init_project.py` in an empty destination. |
+| Continue or diagnose an existing project | Read its configuration, stage Reports, selected run plan and completion evidence. Use its bundled `tools/`; do not regenerate the project. Read [execution](references/execution.md) or [troubleshooting](references/troubleshooting.md) as needed. |
+| Improve or select an analysis | Read [iteration practice](references/iteration-practice.md). Identify the incumbent, evidence, allowed changes and stopping condition. For the four-axis Scanpy controller also read [automatic review](references/optimization.md). |
+| Revise labels or figures | Locate the exact source run and annotation revision. Read [Scanpy annotation](references/scanpy.md) or [publication figures](references/publication-figures.md); reuse saved coordinates for presentation-only work. |
+| Maintain this skill or upgrade templates | Read [template maintenance](references/template-maintenance.md). Update the portable template and distribution, test in isolation, and explain signature changes before upgrading an idle generated project. |
 
-## Invariants
+Read only the workflow references involved: [Scanpy/Harmony](references/scanpy.md),
+[MethSCAn](references/methscan.md), or [ALLCools/MethylVI](references/methylvi.md).
+Existing authorization carries forward within its scope; this skill itself does
+not authorize execution, annotation approval, or unrelated experiments.
 
-- Every UMAP, from intermediate candidates to reviewed baselines and publication figures, must use `Scripts/Common/embedding_plot.py` and its `save_embedding()` helper: an 8 × 8 in square canvas, 300 dpi PNG (2400 × 2400 px), equal-aspect square axes, a single-column categorical legend outside the panel, and one vertical colour bar per numerical panel. Apply the same convention to ad-hoc final rendering helpers, not just the packaged notebook. Never use tight cropping for embeddings or silently switch to multiple legend columns; split an overcrowded comparison into single-panel square figures instead. See [figure standard](references/scanpy.md#figure-standard). Non-embedding dotplots/heatmaps are not forced square.
-- Treat RNA, ALLC, annotation, genome, and pre-existing shared environments as read-only inputs.
-- Every analysis input must be reachable from the project as `Data/<name>`. Link or download it there rather than configuring an absolute path elsewhere; a project that reads outside its own directory is not reproducible from it, and the sample manifest is where the deviation becomes invisible.
-- Never upgrade or mutate a discovered shared environment. Create missing dependencies under the generated project's `.environments/` directory or an explicitly configured new prefix.
-- Do not infer condition, batch, donor, tissue, or cell identity from directory names.
-- Require `.tbi` beside every `.allc.tsv.gz` used as indexed ALLC input.
-- Derive ALLC ownership from `samples.tsv`, chromosomes from `chrom_sizes`, and methylation context from configuration; never infer them from a previous project.
-- Preserve integer MethylVI `mc`/`cov`, require `0 <= mc <= cov`, unique cells/features, and matching input signatures before checkpoint reuse.
-- A new Scanpy cluster set is unreviewed. Never transplant numeric cluster mappings without a matching analysis signature and exact cluster set; `tools/record_annotation_review.py` reviews the run's own clusters and writes both into the profile it records.
-- Annotate every cluster automatically in the pass that produced it. A supplied per-cell reference annotation may seed a candidate only after exact cell-ID matching; its cluster purity and disagreements remain evidence, not approval. Without one, use this run's markers plus looked-up biological references. Never silently transplant another run's numeric cluster mapping. Low-confidence calls still receive the best-supported biological label, with confidence and alternatives recorded explicitly; `Unassigned` is not a completed candidate. Prompt the user to audit the complete candidate, and keep it distinct from the approved baseline.
-- Never use `NA`, `Unassigned`, `requires_review`, or an unapproved annotation table for cell-type DMR.
-- Keep Top-N hypo-DMR heatmap selection separate from the all-unique pooled-DMR MethylVI route.
-- Never execute a planned task on a Slurm submit host. Resource inspection and submission belong there; execution belongs on a compute node or, on a machine with no scheduler at all, on that machine. `run_task.py` and `task_adapter.py` refuse at execution, and `Methylvi/*/run.sh` refuse in shell; a refusal is a precondition failure that writes no task evidence, not a failed task. If work must run on the machine you are on, use an allocation (`salloc`, `srun --pty bash`) rather than an override.
-- Execute production tasks only through the planned DAG. Overrides must emit `task_outputs.json` with a non-empty list of existing artifacts. The packaged `run_*.sbatch` and `submit_*.sh` wrappers are for exploration, smoke testing, and recovery; they resolve resources from scheduler profiles and are never the source of a run's completion evidence. The `.sbatch` wrappers are sbatch entry points — submit them rather than running them by hand outside an allocation.
-- Report Slurm-reserved CPU/memory separately from observed load/`FreeMem`. Never treat reserved memory as proof of actual use.
-- Do not reduce below a task resource floor merely to fit a busy node. Do not pin a node unless data visibility or hardware requirements demand it.
-- Use a small isolated test when the template, environment, schema, or high-risk route changed; ordinary repeated runs still require full read-only preflight.
-- In the Scanpy MVP, change exactly one logical axis per round: `n_pcs`, `n_neighbors`, `resolution`, or `min_dist`. Keep `spread`, random seed, distance metric, batch correction, and HVG configuration fixed. A rule fallback must identify itself as a fallback; it is never evidence that Jev ran.
-- Treat `system_one_local` as an LLM simulation of the System One interface, not as Jev. Run its OpenAI-compatible model server as a separate compute-node service, use the isolated Python >=3.10 `decision` environment for the official adapter, and retain its usage/retry/attempt evidence.
+## From inputs to completed evidence
 
-## Packaged project code
+1. Resolve inputs through the project's `Data/` links or verified downloads and
+   explicit sample manifest. Keep RNA, ALLC, annotations, genome files and shared
+   environments read-only. Each indexed ALLC needs its adjacent `.tbi`; derive
+   ownership from `samples.tsv`, chromosomes from `chrom_sizes`, and contexts
+   from configuration. Never infer condition, batch, donor or cell identity from
+   directory names. Preserve declared checksums, including local-file sources.
+2. Discover compatible environments before creating missing isolated ones. Read
+   [environment provisioning](references/environments.md); never upgrade a shared
+   environment to make this project run.
+3. Validate the selected routes with `tools/validate_project.py`. Quick validation
+   precedes planning and submission; first production use or changed inputs,
+   schema or runtime requires matching full-validation evidence. Full ALLC
+   validation reads inputs in distributed compute jobs. The explicit
+   `--skip-full-validation` option records missing evidence, not a passing check.
+4. Plan a distinct DAG with `tools/plan_workflow.py`. Outputs belong in
+   `Results/runs/<run-id>/`; reuse an ID only to resume its matching signed plan.
+   For authorized execution, inspect scheduler resources immediately before each
+   submission. Never execute a planned task on a Slurm submit host.
+   Run analysis and numerical review on compute nodes, or on a standalone machine
+   without a scheduler. On a submit host, obtain an allocation;
+   do not bypass execution guards. Follow [execution](references/execution.md).
+5. Use validated artifacts, task completion markers and `run_summary.json` to
+   determine completion. Submission success and Slurm exit state are insufficient.
+   Execute production tasks through the planned DAG; custom tasks must emit
+   `task_outputs.json` with existing artifacts. Standalone wrappers support
+   exploration, isolated smoke tests and recovery, not DAG completion evidence.
+6. Report the selected result, unresolved decisions and evidence paths. Keep the
+   generated root README stable. `inspect_run.py` refreshes root/stage Report run
+   logs; `update_report.py` rebuilds them. Read
+   [documentation](references/documentation.md) when changing these contracts.
 
-`assets/project-template/` contains portable copies of the maintained Environment, Scanpy, MethSCAn, ALLCools, MethylVI, VMR, and VMR+DMR code. Generated projects receive their own runtime tools and remain runnable without this skill installed. Read [template maintenance](references/template-maintenance.md) before updating packaged algorithms.
+Respect task resource floors; do not pin nodes without a data/hardware need.
+Report reserved CPU/memory separately from measured load and free memory. Use
+isolated smoke tests after runtime, environment or high-risk route changes.
 
-## Conditional references
+## Annotation and iterative decisions
 
-- Read [troubleshooting](references/troubleshooting.md) for failed jobs, inaccessible storage, signature mismatch, or recovery.
-- Read [documentation](references/documentation.md) when creating or updating README, Report, manifests, and completion evidence.
-- Read [Git collaboration](references/git.md) only when the user asks to initialize, commit, connect, or push a repository.
-- Read [automatic Scanpy review](references/optimization.md) when asked to benchmark, audit, or iteratively optimize Scanpy/UMAP candidates.
+A Scanpy candidate needs a complete proposed annotation. Match a supplied
+per-cell reference by exact cell ID; otherwise use this run's markers, QC, sample
+composition and appropriate biological references. Record confidence,
+alternatives and marker evidence, render the annotated candidate, and then
+request the user's review. `Unassigned` is not a finished candidate annotation.
+`tools/prepare_scanpy_candidate_reference.py` packages a completed run's worksheet
+as an unapproved, provenance-bound reference; it does not grant approval.
 
-## Batch figure delivery
+Never transplant numeric cluster mappings. `tools/record_annotation_review.py`
+binds a mapping to the source analysis signature and exact cluster set. Bind
+approval to the actual exported revision and cells; a numerical baseline rerun
+must also verify membership. An explicitly approved, verified derived cell table
+can feed downstream analysis without a baseline rerun.
 
-New plans deliver comparison figures for all selected routes before the final workflow summary. Read [batch figure delivery](references/figures-comparison.md) for source fields, DMR collection, supervised skips, output evidence, recovery and visual review. Atlas canvases are an explicit non-square exception; individual embedding panels retain the shared 8×8 inch / 300 dpi exporter. Automatic workflow completion does not imply visual review passed.
+Cell-type DMR additionally requires approved project-level annotation, sufficient
+group sizes and resolved per-row review/eligibility flags. Case-insensitive
+placeholder labels are rejected. Descriptive labels alone cannot communicate a
+review decision: retain confidence, exclusions and explicit disposition in a
+separate handoff table. `analysis.methscan.use_rna_annotation: false` defers RNA
+annotation and leaves unsupervised VMR available while disabling cell-type DMR.
+
+For continued improvement, distinguish scientific changes, annotation revisions
+and rendering revisions. Keep the incumbent explicit and retain rejected runs.
+The packaged automatic controller changes one adjacent grid step in exactly one
+logical axis: PCs, neighbors, resolution or UMAP min_dist. It uses fixed
+cell-ID-based sampling and evaluation k across the session. Other scientific
+changes require a separately planned experiment and a new session.
+
+Review only completed evidence-valid candidates. Frozen rounds bind the full
+configuration and source hashes; applying a round is a separate recoverable,
+single-use operation. Escalation overrides automatic acceptance. Stop at the
+configured budget, lack of improvement, grid boundary or review requirement;
+continuation after a terminal round needs an explicit new session. Automatic
+acceptance is neither annotation approval nor proof of global optimality.
+
+An annotation derived from the same clustering is circular evidence, even after
+review. Independent cell-type validation requires an explicit independent
+reference. Report backend fallback and unavailable visual review honestly:
+`system_one_local` simulates the System One interface with an ordinary LLM and
+must never be described as Jev. Keep credentials out of evidence and use the
+isolated decision environment described in [automatic review](references/optimization.md).
+
+Preserve integer MethylVI `mc`/`cov`, `0 <= mc <= cov`, unique cells/features and
+matching input signatures before checkpoint reuse. Keep Top-N hypo-DMR display
+selection separate from the all-unique pooled-DMR MethylVI feature route.
+
+## Figure delivery
+
+For plot-only requests, preserve source H5ADs, saved coordinates, scientific
+parameters and annotation revisions. Freeze category order/palette, verify source
+hashes and export a new figure revision. Read
+[publication figures](references/publication-figures.md) for expression scales,
+composition denominators, DMR missingness/normalization and visual acceptance.
+
+Every individual embedding uses `Scripts/Common/embedding_plot.py` and
+`save_embedding()`: 8 × 8 inches, 300 dpi PNG (2400 × 2400 pixels), equal-aspect
+square axes, categorical legend outside the panel in one column, and a vertical
+numerical color bar. No tight cropping. Split overcrowded comparisons into
+individual panels. Dotplots and heatmaps need not be square.
+
+Selected routes receive a comparison delivery before the workflow summary.
+Read [batch figure delivery](references/figures-comparison.md) for source adapters,
+checksums, recovery and review. Atlas canvases are the explicit non-square
+exception; their individual embedding exports retain the shared standard.
+Preserve saved display order and colors across independent renderers.
+Artifact completion and visual approval are separate evidence states.
+
+Read [Git collaboration](references/git.md) only for requested repository actions.
+Generated projects carry their runtime tools and do not depend on this skill
+remaining installed.

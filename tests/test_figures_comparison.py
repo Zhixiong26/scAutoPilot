@@ -284,6 +284,42 @@ class SourceAdapterTests(unittest.TestCase):
                     'target_weights':[0.3],'cells':4})
         return run_dir, result, plan, spec
 
+    def test_explicit_display_palette_survives_h5ad_and_overrides_methscan_fallback(self):
+        path = self.root / 'display.h5ad'
+        data = self.write_embedding(path)
+        data.obs['rna_cell_type'] = self.pd.Categorical(['T/NK', 'B', 'T/NK', 'B'])
+        data.uns['rna_cell_type_display_order'] = ['B', 'T/NK']
+        data.uns['rna_cell_type_display_palette'] = ['#112233', '#aabbcc']
+        data.write_h5ad(path)
+        source = mock.Mock()
+        source.file.return_value = path
+        obs, coordinates, colors = renderer.embedding(source, path)
+        palette, order, origin = renderer.palette_for(obs, colors, 'rna_cell_type', methscan=True)
+        self.assertEqual(order, ['B', 'T/NK'])
+        self.assertEqual(palette, {'B': '#112233', 'T/NK': '#aabbcc'})
+        self.assertEqual(origin['origin'], 'source_display_palette')
+        self.assertTrue(self.np.array_equal(coordinates['X_umap'], data.obsm['X_umap']))
+
+    def test_display_metadata_rejects_missing_duplicate_and_unknown_labels(self):
+        obs = self.pd.DataFrame({'label': ['A', 'B']})
+        for colors in [
+            {'label_display_order': ['A', 'B']},
+            {'label_display_palette': ['red', 'blue']},
+            {'label_display_order': ['A', 'B'], 'label_display_palette': ['red']},
+            {'label_display_order': ['A', 'A'], 'label_display_palette': ['red', 'blue']},
+            {'label_display_order': ['A', 'C'], 'label_display_palette': ['red', 'blue']},
+        ]:
+            with self.subTest(colors=colors), self.assertRaises(ValueError):
+                renderer.palette_for(obs, colors, 'label', methscan=True)
+
+    def test_methscan_saved_categorical_palette_precedes_reconstruction(self):
+        obs = self.pd.DataFrame({'label': self.pd.Categorical(['B', 'A'], categories=['A', 'B'])})
+        palette, order, origin = renderer.palette_for(obs, {'label_colors': ['red', 'blue']}, 'label', methscan=True)
+        self.assertEqual(palette, {'A': '#ff0000', 'B': '#0000ff'})
+        self.assertEqual(origin['origin'], 'source_uns')
+        _, _, fallback = renderer.palette_for(obs, {}, 'label', methscan=True)
+        self.assertEqual(fallback['origin'], 'source_methscan_sorted_tab20')
+
     def test_seven_routes_candidate_fields_and_vmr_subsets(self):
         run_dir, result, plan, spec = self.populate(ROUTES)
         sources=renderer.Sources(self.root,plan,spec)
