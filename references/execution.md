@@ -2,7 +2,14 @@
 
 `plan_workflow.py` writes a closed DAG under `.workflow/runs/<run-id>/`; writable analysis outputs go to `Results/runs/<run-id>/`. `submit_workflow.py` revalidates signatures, requires matching full validation, and resumes only incomplete tasks.
 
-For Slurm, every task independently queries `sinfo`, `scontrol show nodes`, and `squeue` immediately before `sbatch`. Allocation capacity uses `CPUTot-CPUAlloc` and `RealMemory-AllocMem-headroom`; `CPULoad` and `FreeMem` are diagnostic only. The balanced selector requests the target when it fits, may reduce toward the floor, and fails when no permitted active node meets the floor.
+For Slurm, every task independently queries `sinfo`, `scontrol show nodes`, and `squeue` immediately before `sbatch`. Allocation capacity uses `CPUTot-CPUAlloc` and `RealMemory-AllocMem-headroom`; `CPULoad` and `FreeMem` are diagnostic only. The balanced selector requests the target when it fits and may reduce toward the floor. If no current slot fits, `queue_when_busy` (default true) permits a request fitting an allowed healthy node's total capacity and marks `immediately_available: false`. Down/drained nodes are excluded. Set this option false to require current capacity. Observed snapshots are never rewritten to pretend resources are idle.
+
+Dry-run writes `plan_preview.json`, `submission_preview.json` and resource previews;
+it does not change the signed plan or live submissions. Resume repairs scientific
+dependencies of pending children when a parent job ID changes; running children
+with changed parents require manual review. Concurrency limits use `afterany`,
+scientific dependencies use `afterok`. VMR+DMR models share completed counts and
+their own VMR features, not the preceding model's success.
 
 Resource options and dependencies are passed on the `sbatch` command line. Nodes are not pinned unless a profile explicitly requires it.
 
@@ -29,6 +36,22 @@ Resource inspection for the `local` backend is against the local machine: the re
 Built-in adapters cover every planned task and choose the task's declared stage Python from `environments.tsv`. The task registry is checked during planning and again before production submission. `analysis.task_commands` may override an exact or prefix-wildcard task and may use `{python}`, `{project}`, `{run_id}`, `{run_dir}`, `{result_dir}`, `{task}`, `{task_dir}`, `{threshold}`, and `{features}`.
 
 After a successful override, write `<task_dir>/task_outputs.json` as a JSON object with a non-empty `artifacts` list. Artifact paths should be absolute and every path must exist. The wrapper stores the child command's code as `process_return_code`; missing or invalid evidence makes the wrapper `return_code` nonzero with `failure_stage: output_validation`.
+
+The successful wrapper seals new artifact records: regular files carry size and
+mtime, and files up to 16 MiB also carry SHA-256. Large files still require producer
+format/count checks; directories receive presence/type checks, not recursive
+content validation. Empty scientific files are refused unless explicitly listed
+in `allow_empty_artifacts`; `.COMPLETE` markers may be empty. Prefer header-bearing
+zero-result tables and explicit no-result JSON. Old unsealed records are not
+retroactively content-verified. Custom workflow summaries have the same default
+task_outputs contract as other overrides.
+
+After successful verification, run_task updates Results/RESULTS_INDEX.md in a
+locked, atomically replaced, run/task-keyed block, preserving human-written text.
+An index failure is a separate warning and never a reason to repeat science.
+Memory inspection retains sacct steps and reports the maximum recorded task RSS
+with its source; this is not simultaneous whole-job RSS. Running accounting is
+provisional, not evidence of zero CPU use.
 
 Production stages are entered through `plan_workflow.py` and `submit_workflow.py`. The template also ships standalone `run_*.sbatch` and `submit_*.sh` wrappers for exploring one stage, smoke testing a change, and recovering a single stage of a completed run. They are not a second production path: they produce no `task_outputs.json`, carry no site directive, and take their resources from the same named scheduler profiles the DAG uses, so a wrapper run and a DAG run request identical allocations. A wrapper's success is a stage result, never a run's completion evidence.
 

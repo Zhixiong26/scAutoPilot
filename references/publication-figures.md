@@ -67,6 +67,17 @@ biological approval.
 
 ## DMR heatmaps: inspect the matrix before changing the display
 
+Required four-view delivery for every per-sample or pooled methylation DMR
+heatmap: `mean_ratio.png`, `zscore.png`, `zscore_colorbar_compressed.png`, and
+`zscore_mean.png`. The fourth averages saved single-cell DMR-wise Z-scores within
+each cell type (cell-weighted, not donor-balanced); do not Z-score the means.
+Require at least 3 finite cells per type/DMR, otherwise retain NA (gray).
+Keep the same DMR set/order and export mean values and observed-cell counts.
+Default ranges are raw [0,1], Z-score [-3,3], compressed and mean [-1,1]; display
+limits never clip the exported values. Comparison deliveries collect all four.
+This contract does not apply to expression heatmaps, count-summary charts or
+recursive aggregation of an already aggregated diagnostic heatmap.
+
 When heatmaps look blank, inverted, patchy or dominated by one type, first audit
 the saved matrices and DMR selection. Record shape, cell/region IDs, per-type
 counts, finite-value/coverage fraction, genomic coordinates, DMR direction,

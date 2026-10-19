@@ -84,6 +84,11 @@ def slurm_job_state(job_id: str) -> str:
             ["squeue", "-h", "-j", str(job_id), "-o", "%T"],
             stderr=subprocess.STDOUT,
         ).decode("utf-8").strip().splitlines()
+    except subprocess.CalledProcessError as exc:
+        message = (exc.output or b'').decode('utf-8', 'replace') if isinstance(exc.output, bytes) else str(exc.output or '')
+        if 'invalid job id' not in message.lower():
+            raise WorkflowError("cannot query squeue for job %s: %s" % (job_id, message))
+        queued = []  # Purged history belongs to sacct, not a duplicate submission.
     except (OSError, subprocess.SubprocessError) as exc:
         raise WorkflowError("cannot query squeue for job %s: %s" % (job_id, exc))
     if queued:
@@ -196,7 +201,10 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
 
     submissions_path = run_dir / "submissions.json"
     previous = json.loads(submissions_path.read_text(encoding="utf-8")) if submissions_path.is_file() else []
+    if dry_run:
+        submissions_path = run_dir / "submission_preview.json"
     records = {item["task"]: item for item in previous}
+    original_job_ids = {item['task']: str(item['job_id']) for item in previous if item.get('job_id')}
     job_ids = {}
     max_parallel = max(1, int(scheduler.get("max_parallel", 2)))
     limited_profiles = set(scheduler.get("limited_profiles") or ["methscan_branch", "dmr", "feature_builder", "trainer"])
@@ -215,12 +223,38 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
             state = slurm_job_state(str(existing["job_id"]))
             existing["scheduler_state"] = state
             if state in {"PENDING", "RUNNING", "CONFIGURING", "COMPLETING", "SUSPENDED", "REQUEUED", "RESIZING"}:
+                # A retried parent changes the scientific job IDs even though
+                # task names are identical. Repair only a still-pending child.
+                dependencies = [job_ids[name] for name in item["dependencies"] if name in job_ids]
+                old_dependencies = existing.get("scientific_job_ids")
+                if old_dependencies is None:
+                    old_dependencies = []
+                    old_command = existing.get("sbatch", [])
+                    if "--dependency" in old_command:
+                        expression = old_command[old_command.index("--dependency") + 1]
+                        old_dependencies = [j for clause in expression.split(',') if clause.startswith('afterok:')
+                                            for j in clause.split(':')[1:]]
+                old_parent_ids = {original_job_ids[name] for name in item['dependencies'] if name in original_job_ids}
+                external_dependencies = [j for j in old_dependencies if j not in old_parent_ids]
+                dependencies += [j for j in external_dependencies if j not in dependencies]
+                if dependencies != old_dependencies:
+                    if state != "PENDING":
+                        raise WorkflowError("active task %s has changed scientific parents; manual review required" % task_id)
+                    expression = slurm_dependency_argument(dependencies, existing.get("throttle_dependencies", []))
+                    update = ["scontrol", "update", "JobId=" + str(existing["job_id"]), "Dependency=" + expression]
+                    if not dry_run:
+                        subprocess.check_output(update, stderr=subprocess.STDOUT)
+                    existing["dependency_repair"] = {"old": old_dependencies, "new": dependencies, "dry_run": dry_run}
+                    existing["scientific_job_ids"] = dependencies
                 job_ids[task_id] = str(existing["job_id"])
+                if item["profile"] in limited_profiles:
+                    throttle_slots[throttle_index % max_parallel] = str(existing["job_id"])
+                    throttle_index += 1
                 write_json(submissions_path, [records[x["id"]] for x in plan["tasks"] if x["id"] in records])
                 continue
             existing["status"] = "retryable"
             existing["previous_job_id"] = str(existing["job_id"])
-        snapshot_path = run_dir / "resource_snapshots" / (task_id + ".json")
+        snapshot_path = run_dir / ("resource_previews" if dry_run else "resource_snapshots") / (task_id + ".json")
         snapshot = inspect(root, item["profile"], run_id=run_id, resolved_backend=backend)
         write_json(snapshot_path, snapshot)
         recommendation = snapshot["recommendation"]
@@ -241,6 +275,7 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
         record = {
             "task": task_id, "profile": item["profile"], "dependencies": item["dependencies"],
             "throttle_dependencies": throttle_dependencies,
+            "scientific_job_ids": dependencies,
             "resource_snapshot": str(snapshot_path), "recommendation": recommendation,
             "command": command, "submitted_at": datetime.now(timezone.utc).isoformat(),
             # Which host decided, and which backend really ran. A record that does
@@ -320,7 +355,7 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
     # skipped. The value reflects what happened, so a run that reused evidence
     # already on disk was validated and says so.
     plan["full_validation_skipped"] = full_validation_skipped
-    write_json(run_dir / "plan.json", plan)
+    write_json(run_dir / ("plan_preview.json" if dry_run else "plan.json"), plan)
     return {"status": plan["status"], "run_dir": str(run_dir), "jobs": job_ids,
             "host_role": role, "backend_effective": backend, "backend_source": backend_source,
             "full_validation_skipped": full_validation_skipped}

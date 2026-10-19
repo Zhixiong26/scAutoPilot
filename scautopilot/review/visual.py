@@ -149,12 +149,15 @@ def _calculate_visual_metrics(adata, max_cells, seed):
     count = int(adata.n_obs)
     if count < 4:
         raise VisualEvidenceError("visual verification needs at least four cells")
-    if count > max_cells:
-        rng = np.random.RandomState(seed)
-        selected = np.sort(rng.choice(count, max_cells, replace=False))
-    else:
-        selected = np.arange(count)
+    import hashlib
+    if not adata.obs_names.is_unique:
+        raise VisualEvidenceError('visual verification requires unique cell IDs')
+    ids = adata.obs_names.astype(str).to_numpy()
+    selected = np.asarray(sorted(range(count), key=lambda i:
+        hashlib.sha256((str(seed) + '\0' + ids[i]).encode()).digest())[:max_cells])
     values = np.asarray(adata.obsm["X_umap_after_harmony"][selected, :2], dtype=float)
+    if not np.isfinite(values).all():
+        raise VisualEvidenceError('visual coordinates must be finite')
     obs = adata.obs.iloc[selected]
     k = min(15, len(selected) - 1)
     distances, indices = NearestNeighbors(n_neighbors=k + 1).fit(values).kneighbors(values)
@@ -165,7 +168,7 @@ def _calculate_visual_metrics(adata, max_cells, seed):
     neighbors = np.asarray([[other for _, other in row] for row in pairs], dtype=int)
     nearest = np.asarray([row[0][0] for row in pairs])
 
-    sample_key = "sample" if "sample" in obs else "cohort" if "cohort" in obs else None
+    sample_key = next((key for key in ('sample_id', 'sample', 'cohort') if key in obs), None)
     sample_enrichment = None
     if sample_key:
         samples = obs[sample_key].astype(str).to_numpy()

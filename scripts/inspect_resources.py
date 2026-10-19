@@ -109,6 +109,8 @@ def choose(nodes: List[Dict[str, Any]], scheduler: Dict[str, Any], profile: Dict
     for node in nodes:
         if node["state"] not in ACTIVE_STATES:
             continue
+        if any(flag in node.get('state_detail', '').upper() for flag in ('DRAIN', 'DOWN', 'FAIL', 'NOT_RESPONDING')):
+            continue
         if allowed_partitions and node["partition"] not in allowed_partitions:
             continue
         if allowed_nodes and node["name"] not in allowed_nodes:
@@ -125,6 +127,22 @@ def choose(nodes: List[Dict[str, Any]], scheduler: Dict[str, Any], profile: Dict
         waste = (node["schedulable_cpu"] - cpus) + (node["schedulable_memory_mb"] - memory_mb) / 1024.0
         candidates.append((target_fit, -waste, node, cpus, memory_mb))
     if not candidates:
+        if scheduler.get("queue_when_busy", True):
+            capacity = []
+            for item in nodes:
+                if item['state'] not in ACTIVE_STATES | {'allocated'}:
+                    continue
+                if any(flag in item.get('state_detail', '').upper() for flag in ('DRAIN', 'DOWN', 'FAIL', 'NOT_RESPONDING')):
+                    continue
+                node = dict(item, state='idle', schedulable_cpu=item.get('cpu_total', 0),
+                            schedulable_memory_mb=max(0, item.get('real_memory_mb', 0) - int(scheduler.get('memory_headroom_mb', 4096))))
+                capacity.append(node)
+            try:
+                result = choose(capacity, dict(scheduler, queue_when_busy=False), profile)
+            except WorkflowError:
+                raise WorkflowError("no allowed healthy Slurm node has capacity for the resource floor")
+            result.update(immediately_available=False, selection_basis='hardware_capacity_wait_for_scheduler')
+            return result
         raise WorkflowError("no active Slurm node satisfies the resource floor")
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     unused_fit, unused_waste, node, cpus, memory_mb = candidates[0]
@@ -133,6 +151,7 @@ def choose(nodes: List[Dict[str, Any]], scheduler: Dict[str, Any], profile: Dict
         "cpus": cpus, "memory_mb": memory_mb, "memory": "%dM" % memory_mb,
         "time": profile["target"].get("time", "1-00:00:00"),
         "pin_node": bool(profile.get("pin_node", False)),
+        "immediately_available": True, "selection_basis": "current_schedulable_capacity",
     }
 
 

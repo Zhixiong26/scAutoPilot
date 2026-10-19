@@ -48,3 +48,55 @@ The run log is a canonical re-render, never a surgical insert. `build_report_tex
 ## Figure-delivery state (run-log format 2)
 
 For runs containing figures_comparison, root and touched stage logs additionally show figure_delivery_status and visual_review_status and link the manifest. Stage analysis counts remain stage-local. Legacy runs keep their existing fields. `complete` is automatic DAG completion; pending/failed visual review must not be described as visual delivery complete. See [batch delivery](figures-comparison.md).
+
+## Results and figure index
+
+Maintain `Results/RESULTS_INDEX.md` as a discoverable navigation document,
+separate from the stable project README and the evidence-owned Report run log.
+Updating this index is part of figure delivery, recovery and progress inspection;
+do it without another user request when new outputs are confirmed. Do not wait
+for the whole multi-branch run to finish before indexing a completed branch.
+
+- Link the result directory, manifest/report, main PNG/PDF, comparison atlas and
+  preview when present. For large repeated sets, link a per-run inventory with
+  all figures instead of flooding the top-level index. Check that links resolve.
+- Record project/run, task, cohort/input selection, feature route and parameters
+  needed to distinguish versions. Keep original versus label-guided UMAP,
+  native versus MethylVI embedding, and pooled versus per-sample or donor-level
+  DMR results distinct. Use relative links within a project where practical and
+  resolved cross-project links when explicitly collecting related projects.
+- Verify completion evidence and manifests before assigning a completed state.
+  Separate artifacts present, evidence verified, and visual review passed.
+  A rendering success is not visual approval or annotation approval. Keep queued,
+  running, failed and not-yet-generated outputs in a separate status section;
+  a reserved output directory is not a delivered figure.
+- Update entries idempotently by project/run/task/revision, retaining historical
+  entries and marking superseded or cancelled versions. Preserve user-written
+  notes; never rebuild the whole file destructively or overwrite scientific data.
+  Include the check timestamp and identify stale summaries explicitly.
+- Update again after visual review or recovery changes the delivery state.
+  If writing the index fails, report the documentation failure without changing
+  the scientific task verdict or hiding its evidence.
+
+The maintained `run_task.py` calls the locked, atomic updater after every
+success or handled failure. Failures link diagnostic status, not unvalidated
+scientific artifacts. Completion time and source Results identity are recorded;
+the project/run/task key prevents collisions across projects. Large artifact
+sets link their task inventory rather than listing thousands of checkpoints.
+
+For an explicitly authorized cross-project master, create
+`Results/index_targets.json` with `{"additional_results_roots": ["/absolute/path/to/master/Results"]}`.
+These are Results directories, not Markdown filenames. Publication goes to the
+local index and each listed target exactly once, with no recursive forwarding.
+This presentation-only routing file does not change scientific parameters.
+No site-specific master path belongs in the portable skill. A failed mirror
+does not prevent local publication or change science status; the task records
+an index-update warning.
+
+Before a new submission, verify the frozen executor has this hook and test its
+local/central targets. Old snapshots do not gain it merely from skill sync.
+Do not rewrite frozen plans; upgrade idle maintenance roots before a new plan,
+or deploy a separate afterany index-reconciliation task for legacy executions.
+SIGKILL/OOM/cancellation can prevent a hook from running; reconcile scheduler
+status during progress inspection, without calling missing outputs complete.
+This is a task completion hook, not an installed daemon or continuous monitor.

@@ -1,4 +1,14 @@
-# Automatic Scanpy review MVP
+# Evidence-gated Scanpy parameter search (0.12)
+
+For published alternatives and confirmatory methods, read
+[literature-backed methods](published-methods.md): chooseR, clustree and scIB have
+distinct purposes and explicit external deployment status. They do not silently
+replace this controller's frozen four-axis policy. Its silhouette/DB screen is a
+heuristic; missing biological/stability evidence still prevents formal acceptance.
+
+For MethSCAn and MethylVI use [methylation iteration](methylation-optimization.md):
+an executable retained-representation DAG loop plus agent-managed outer feature/
+model experiments. The Scanpy controller below is not their executor.
 
 For the broader diagnostic/annotation/selection loop and MethylVI comparisons,
 read [evidence-led iteration](iteration-practice.md). This controller implements
@@ -23,15 +33,22 @@ The four logical axes and frozen grids are in `config/optimization.yaml`:
 
 Keep UMAP spread, the global random seed, Euclidean distance, batch-correction
 configuration, and HVG configuration fixed. A round moves one adjacent grid
-step; it never invents a continuous value or changes two logical axes.
+step relative to the selected incumbent; it never invents a continuous value or
+changes two scientific axes relative to that base. If the latest candidate was
+rejected, schema-v3 plans explicitly restore the incumbent first. This may
+change several settings relative to the latest rejected run; the restoration
+and the one-axis experiment are recorded separately, never hidden.
 
 ## Evidence and judgments
 
 `tools/review_scanpy_iteration.py` computes:
 
 - UMAP reviewer: trustworthiness and KNN preservation.
-- Clustering reviewer: silhouette and Davies–Bouldin; when available, cell-type
-  ASW, normalized iLISI, and batch ASW.
+- Clustering screen: silhouette and Davies–Bouldin, full-cohort cluster sizes,
+  small-cluster cell fraction, and independent-label best-cluster F1 when available.
+- Diagnostics: cell-type ASW, fixed-k inverse-Simpson sample mixing, and batch
+  ASW. The historical `ilisi` field is an unweighted fixed-k approximation,
+  **not scIB's perplexity-based iLISI**. It is not a selection objective.
 
 An automatic candidate annotation derived from the same Leiden partition is
 marked circular. Its cell-type ASW is recorded for audit but cannot serve as
@@ -45,7 +62,16 @@ The benchmark defaults are `max_cells: 5000`, `evaluation_k: 15`, and `seed: 0`
 under `scanpy_mvp.benchmark`. Cells are selected and ordered by a seeded SHA-256
 of cell ID, so reordering an H5AD does not change the comparison. Evaluation k
 is independent of the candidate graph's `n_neighbors` and is capped for small
-datasets. The protocol and sampled-cell digest must match throughout a session.
+datasets. The protocol, complete cell/feature sets, sample/condition metadata,
+independent reference labels and sampled-cell digest must match throughout a
+session. All candidates are evaluated against the initial run's frozen Harmony
+space and its initial `n_pcs`; reference coordinates are hashed. This prevents
+a PC change from changing the ruler. The candidate's own Harmony space is used
+for batch diagnostics. The initial reference is not biological ground truth:
+these scores measure fidelity to that reference, and can miss useful new axes.
+Use marker/QC review and finalist stability checks before scientific acceptance;
+if the reference itself is unsuitable, start a separately declared experiment.
+Unavailable PCs raise an error rather than silently clipping the request.
 The 5,000-cell cap bounds the quadratic trustworthiness calculation; increasing
 it requires an appropriately sized compute allocation.
 
@@ -172,13 +198,70 @@ with the same `--next-run-id`; recovery verifies the original snapshots and
 accepts only the exact before/after configuration. Once complete it cannot be
 applied again, and an existing run ID cannot be reused for a new candidate.
 
-Hard stops are independent of the model: 20 rounds, five consecutive rounds
-without objective improvement, the configured accept threshold, an escalation,
-an exhausted grid boundary, or an explicit no-change decision. Submission still
-obeys the normal authorization and scheduler rules.
-Escalation takes precedence over acceptance. A terminal or `review_required`
-round cannot be continued in place; resolve the question and start an explicit
-new session. Retain previous rounds for comparison.
+## Incumbent selection, search order and stopping
+
+The model's accept probability is advisory. It cannot mark a result accepted,
+terminate available search, approve annotation, or compensate for a regression.
+The old `policy.accept_threshold` field remains readable for compatibility but
+does not control stopping. Escalation still stops immediately for review.
+The legacy `stopping.metric_epsilon` is also superseded by the explicit
+`selection` tolerances; it no longer resets patience on any single-metric gain.
+
+1. Compare each candidate to the **selected incumbent**, not just the preceding
+   run. A candidate needs a material gain and no missing required metric or
+   unacceptable loss. Compare against the initial baseline as well, to prevent
+   many small tolerated losses accumulating into a large regression.
+2. `selection` defaults: absolute metric tolerance 0.01, relative DB tolerance
+   0.05, minimum improvement 0.005, small-cluster-cell-fraction increase 0.02,
+   and independent-label best-cluster-F1 loss tolerance 0.05. Small clusters
+   have fewer than `max(10, ceil(0.001 * n_cells))` cells. These are configurable
+   **screening tolerances, not statistical significance or universal biology**;
+   freeze them before searching. Flagging small groups is not permission to
+   delete a rare population.
+3. First search PCs, neighbors and resolution. Require a silhouette/relative-DB
+   gain without unacceptable embedding or rare-label degradation. Then search
+   `min_dist`; only this phase may select a layout-only gain, explicitly labelled
+   as such. Neither global batch mixing nor circular annotation ASW can win a
+   candidate. Fallback no longer assumes low silhouette means more clusters.
+4. Try legal adjacent settings around the incumbent; consult the model for
+   ordering, but skip visited/infeasible settings and try another direction or
+   axis at a boundary. Without a usable proposal, try resolution, neighbors,
+   then PCs (lower recomputation scope first). No automatic grid expansion.
+5. Defaults remain at most 20 evaluated rounds and patience 5. Science patience
+   applies only after at least one trial of every feasible scientific axis;
+   exhausting the local frontier or the patience budget advances to layout.
+   Layout exhaustion/patience or the total budget stops the search. Budget
+   exhaustion is **not convergence**; local exhaustion is **not a global optimum**.
+6. Every round exports `selection_summary.json` and a machine-readable search
+   record with the incumbent run/parameters, comparison, phase, skipped settings,
+   counters and outstanding finalist checks. The newest run is not implicitly
+   selected. Stopping does not rewrite `analysis.yaml` to the winner or overwrite
+   outputs: use the recorded incumbent artifact and a new plan for any rerun.
+
+New round-plan schema v3 binds `base_run_id`, base parameters, PCA capacity and
+the base-state digest. Application checks those identities, restores only the
+four searched settings/PCA capacity, and makes one adjacent change. Its
+before/after transaction remains recoverable. Complete schema-v2 plans can still
+be applied under their original one-axis contract; legacy sessions cannot be
+continued with the new selection policy. Start a new session and plan.
+
+`execution_scope` records the minimum affected stages. The portable executor
+currently does **full notebook replay**: this field is not a checkpoint cache.
+Already achieved efficiency improvements are bounded local search, no repeated
+parameter points, shared nearest-neighbor calculations and capped deterministic
+benchmark samples. Do not claim QC/PCA/training reuse unless a separate runner
+actually verifies source signatures and implements it.
+
+Before delivery of the selected finalist, review its markers, rare populations,
+sample/condition/QC structure and final figures, and compare alternate seeds on
+the same cells. Separate these confirmatory runs from the fixed-seed parameter
+search. Report stability of membership/graph and small populations, not just the
+number of clusters or a single ARI. The controller lists these as outstanding;
+it does not fabricate completed biological/seed review. Only after these checks
+and explicit annotation approval can a result become formal.
+
+A terminal or `review_required` round cannot be continued in place; resolve the
+question and start an explicit new session. Retain all previous rounds.
 
 An automatic accept/stop is a controller outcome, not annotation approval or a
 claim of global optimality. Compare candidates using a fixed evaluation k and

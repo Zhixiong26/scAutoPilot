@@ -90,7 +90,7 @@ class IterationPipelineTests(unittest.TestCase):
             'candidate_cell_type': ['A'] * 48 + ['B'] * 48, 'sample': ['s1', 's2'] * 48},
             index=['cell_%03d' % i for i in range(96)])
         data = self.ad.AnnData(self.np.zeros((96, 80)), obs=obs)
-        data.obsm['X_pca_harmony'] = rng.normal(size=(96, 50))
+        data.obsm['X_pca_harmony'] = rng.normal(size=(96, int(params['pca_n_comps'])))
         data.obsm['X_umap_after_harmony'] = data.obsm['X_pca_harmony'][:, :2]
         data.uns['annotation_status'] = 'candidate'
         data.write_h5ad(source)
@@ -226,6 +226,102 @@ class IterationPipelineTests(unittest.TestCase):
             data.write_h5ad(path)
             actual = calculate_scanpy_benchmarks(path, {'n_pcs': 30}, max_cells=30)
             self.assertEqual(actual['biology']['independent'], expected)
+
+    def test_model_accept_alone_cannot_end_search(self):
+        self.raw['accept_probability'] = 1.0
+        result = self.review()
+        self.assertEqual(result['status'], 'next_candidate')
+        self.assertEqual(result['incumbent_run_id'], 'first')
+        decision = json.loads((self.root / '.workflow/optimization/session/round_000/decision.json').read_text())
+        self.assertEqual(decision['acceptance_role'], 'advisory_only')
+
+    def test_incumbent_restore_is_explicit_and_applied(self):
+        self.review()
+        apply(self.root, 'session', 'round_000', 'second')
+        self.candidate('second')
+        self.review('second')
+        plan = json.loads((self.root / '.workflow/optimization/session/round_001/round_plan.json').read_text())
+        self.assertTrue(plan['restore_incumbent'])
+        self.assertEqual(plan['base_parameters']['n_neighbors'], 15)
+        self.assertEqual(plan['current_parameters']['n_neighbors'], 20)
+        self.assertEqual(plan['next_parameters']['n_neighbors'], 10)
+        apply(self.root, 'session', 'round_001', 'third')
+        self.candidate('third')
+        self.review('third')
+
+    def test_fixed_evaluation_survives_different_pca_capacity(self):
+        self.raw['parameter'] = {name: float(name == 'n_pcs') for name in PARAMETERS}
+        self.review()
+        apply(self.root, 'session', 'round_000', 'second')
+        self.candidate('second')
+        self.review('second')
+        base = self.root / '.workflow/optimization/session'
+        a, b = [json.loads((base / r / 'state.json').read_text()) for r in ('round_000', 'round_001')]
+        self.assertNotEqual(a['pca_n_comps'], b['pca_n_comps'])
+        self.assertEqual(a['benchmark'], b['benchmark'])
+        self.assertEqual(a['benchmark']['reference_mode'], 'frozen_session_baseline')
+
+    def test_changed_independent_reference_cannot_compare(self):
+        from scautopilot.review.benchmark import calculate_scanpy_benchmarks
+        path = self.root / 'Results/runs/first/scanpy/iterations/first/candidate_analysis.h5ad'
+        data = self.ad.read_h5ad(path)
+        data.obs['cell_type'] = data.obs['candidate_cell_type']
+        data.uns.update(annotation_status='reviewed', annotation_reference_independent=True)
+        data.write_h5ad(path)
+        first = calculate_scanpy_benchmarks(path, {'n_pcs': 30}, max_cells=30)
+        # Keep dependent labels present: the explicitly independent column wins.
+        self.assertTrue(first['biology']['independent'])
+        data.obs['cell_type'] = ['A'] * 96
+        data.write_h5ad(path)
+        second = calculate_scanpy_benchmarks(path, {'n_pcs': 30}, max_cells=30)
+        self.assertNotEqual(first['evaluation']['metadata_sha256'], second['evaluation']['metadata_sha256'])
+
+    def test_no_silent_pc_clipping(self):
+        from scautopilot.review.benchmark import calculate_scanpy_benchmarks
+        path = self.root / 'Results/runs/first/scanpy/iterations/first/candidate_analysis.h5ad'
+        with self.assertRaisesRegex(ValueError, 'silent clipping'):
+            calculate_scanpy_benchmarks(path, {'n_pcs': 60})
+
+    def test_full_cell_identity_not_just_sample(self):
+        from scautopilot.review.benchmark import calculate_scanpy_benchmarks
+        path = self.root / 'Results/runs/first/scanpy/iterations/first/candidate_analysis.h5ad'
+        first = calculate_scanpy_benchmarks(path, {'n_pcs': 30}, max_cells=4)
+        data = self.ad.read_h5ad(path)
+        data = data[:-1].copy()
+        other = path.with_name('different_cells.h5ad'); data.write_h5ad(other)
+        with self.assertRaisesRegex(ValueError, 'complete cell and feature'):
+            calculate_scanpy_benchmarks(other, {'n_pcs': 30}, max_cells=4, reference_h5ad=path)
+
+    def test_tampered_incumbent_refuses_restore(self):
+        self.review()
+        apply(self.root, 'session', 'round_000', 'second')
+        self.candidate('second'); self.review('second')
+        source = self.root / '.workflow/optimization/session/round_000/state.json'
+        state = json.loads(source.read_text()); state['parameters']['resolution'] = 1.0
+        write_json(source, state)
+        with self.assertRaisesRegex(ApplyError, 'base state'):
+            apply(self.root, 'session', 'round_001', 'third')
+
+    def test_visual_sample_is_stable_under_row_reordering(self):
+        from scautopilot.review.visual import calculate_visual_metrics
+        path = self.root / 'Results/runs/first/scanpy/iterations/first/candidate_analysis.h5ad'
+        first = calculate_visual_metrics(path, max_cells=30)
+        data = self.ad.read_h5ad(path)
+        target = path.with_name('visual_reordered.h5ad')
+        data[::-1].copy().write_h5ad(target)
+        self.assertEqual(first, calculate_visual_metrics(target, max_cells=30))
+
+    def test_mutated_decision_history_is_not_reinterpreted(self):
+        self.review()
+        apply(self.root, 'session', 'round_000', 'second')
+        self.candidate('second')
+        path = self.root / '.workflow/optimization/session/round_000/decision.json'
+        decision = json.loads(path.read_text())
+        decision['search']['no_improvement_streak'] = 0
+        decision['search']['phase'] = 'layout'
+        write_json(path, decision)
+        with self.assertRaisesRegex(controller.ReviewError, 'identity changed'):
+            self.review('second')
 
 
 if __name__ == '__main__':

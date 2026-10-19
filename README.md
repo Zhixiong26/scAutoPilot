@@ -6,6 +6,20 @@ A portable Codex skill for configuration-driven single-cell RNA and DNA-methylat
 
 ## 中文使用说明
 
+0.15.0：新增本地 Bismark / MethSCAn / vmrseq 加速包的校验、隔离安装和调用适配，详见 [加速后端](references/acceleration.md)。MethSCAn opt5 CPU 复用现有 DAG；Bismark 与 vmrseq 使用独立入口，GPU 需计算节点和相应依赖。不会自动切换已有项目环境。
+
+0.14.1：任务结束钩子支持成功/失败状态及跨项目总索引。通过 `Results/index_targets.json` 显式指定额外 Results 目录，采用锁和原子更新，保留人工内容；失败仅收录诊断证据。新运行须确认冻结执行器包含钩子，旧快照不因 skill 同步自动升级。强制终止需后续核对补记，不宣称后台守护监控。
+
+0.14.0：新增[文献方法接入](references/published-methods.md)，明确 chooseR、clustree、scIB、MethSCAn/ALLCools、DMR 验证及训练预算的方法来源、适用条件与部署状态。新增可选 `propose_methylvi_trial.py`，调用官方 Optuna Random/TPE 提议模型容量参数，冻结输入/划分/训练协议并避免重复。它不训练、不提交、不自动选 winner；其他外部方法须另行部署验证。默认内循环与现有科学结果不变，不升级活动快照。
+
+0.13.0：补齐 [MethSCAn/MethylVI 迭代流程](references/methylation-optimization.md)。新增显式 `methylation_iteration` DAG 路线，复用已完成结果的 PCA/latent，执行有预算的邻居/分辨率/布局搜索、双基线保护和图聚类种子确认；不重新转换 ALLC、不自动重训模型。特征/模型实验由 agent 单独规划。MethylVI latent/hidden/layers 改为配置项，并保存训练历史与实际划分。新建计划后使用，不升级活动快照、不改旧结果。
+
+0.12.0：自迭代改为“保留最佳候选、先聚类后布局”的有界局部搜索。模型接受分数只作建议；多指标退化保护同时对照最佳候选与初始基线，冻结评估空间及全部细胞/特征/元数据身份，跳过重复或不可执行参数。新 round-plan schema v3 显式记录回退基线、单轴变更、搜索阶段及最终复核清单。通用执行器仍完整重放 Notebook，尚未实现自动阶段缓存；MethylVI 更新为分阶段搜索指导，不冒称新增通用自动训练控制器。升级须新计划、新会话，旧科学结果与活动快照不变。
+
+0.11.2：补强 RNA 文件身份、R 代码签名和任务启动校验；修复依赖恢复、dry-run、图集计划身份、自定义 summary 与 RSS 监控。新增产物身份记录、幂等结果索引、繁忙节点排队和独立 VMR＋DMR 模型并行；ALLCools 新缓存绑定 ALLC 来源。不升级活动运行快照、不覆盖旧结果。配置仍为 schema v2；升级后的运行须新建计划，旧记录不会追溯获得新校验等级。
+
+0.11.1：甲基化 DMR 热图统一输出四套；新增 `zscore_mean.png` 及均值/有效细胞数表，任务验收和 figures_comparison 同步要求第四套。均值为每个 cell type 内单细胞 Z-score 均值，至少 3 个有效细胞，不二次标准化。运行代码签名会改变，已有项目仅可在空闲时升级并建立新计划；不得覆盖正在运行的冻结代码。本次针对性计算节点回归测试（作业 312068）2/2 通过，包含实际四图生成；未声称完整测试套件已运行。
+
 ### 1. 功能范围
 
 支持以下输入组合：
@@ -15,11 +29,11 @@ A portable Codex skill for configuration-driven single-cell RNA and DNA-methylat
 | 仅 RNA | Scanpy/Harmony、QC、聚类、marker 审核表和 UMAP |
 | 仅逐细胞 ALLC | MethSCAn VMR、ALLCools、无监督 MethylVI |
 | RNA + ALLC | RNA 注释、VMR、分样本/合并样本 DMR、ALLCools、MethylVI |
-| ALLC + 有效 `cell_type` | pairwise/pooled DMR、三种热图、VMR + 全部 unique pooled-DMR MethylVI |
+| ALLC + 有效 `cell_type` | pairwise/pooled DMR、四种热图（原始值、Z-score、压缩色阶、cell-type Z-score 均值）、VMR + 全部 unique pooled-DMR MethylVI |
 
 RNA 输入支持标准 10x filtered matrix 目录、ZIP 和 10x H5。甲基化输入支持逐细胞 `.allc.tsv.gz`，也支持通过显式 glob 选择 ALLCools 风格的 `*_allc.gz`；每个压缩 ALLC 必须具有相邻的 `.tbi`。
 
-本项目不处理原始 FASTQ 或 BAM，不把示例项目的样本名、细胞数、节点或用户目录作为默认配置。内置的公共 hg38 参考仅在符合条件的人类甲基化项目中启用，并记录来源；其他物种和基因组需要显式配置。
+默认分析 DAG 从矩阵或 ALLC 开始；显式 Bismark 加速适配器支持上游 FASTQ 比对，但尚无 FASTQ→ALLC 自动衔接。不把示例项目的样本名、细胞数、节点或用户目录作为默认配置。内置的公共 hg38 参考仅在符合条件的人类甲基化项目中启用，并记录来源；其他物种和基因组需要显式配置。
 
 ### 2. 安装
 
@@ -326,7 +340,7 @@ Scanpy 给出的 cell type 是**候选**；依赖 cell type 的 DMR 路线只有
 
 ### 9.1 Scanpy/UMAP 自动审核迭代 MVP
 
-首版只搜索 `n_pcs`、`n_neighbors`、Leiden `resolution` 和 UMAP `min_dist`，每轮只移动一个离散步长。它分别计算 embedding 与 clustering benchmark，以五个类型化判断生成不可变 round plan；随后由独立工具检查摘要和配置漂移后才把下一候选写入 `analysis.yaml`。默认开发 backend 使用官方 `system-one-adapter` 连接本地 OpenAI-compatible 普通 chat model：固定走 Chat Completions，`structured_outputs=false`，由 prompt 要求 JSON 并在客户端验证。它不是 Jev；未来真实 Jev 使用独立的 `typesafe_jev` backend。未配置本地 endpoint 时结果明确标记为未校准规则 fallback。完整状态、指标、审计和命令见 [自动 Scanpy 审核](references/optimization.md)。
+控制器只搜索 `n_pcs`、`n_neighbors`、Leiden `resolution` 和 UMAP `min_dist`，每轮相对明确保留的最佳候选只移动一个离散步长，退化时显式恢复最佳候选。先搜索前三个科学参数，再调布局；模型建议不能替代多指标非退化检查，边界/重复参数会跳过。五个类型化判断和确定性比较共同记录到不可变 round plan；应用工具检查摘要、基线身份、配置漂移与事务后才写入下一候选。默认 backend 使用官方 `system-one-adapter` 连接本地 OpenAI-compatible 普通 chat model，未配置时明确降级；它不是 Jev。完整规则与命令见 [自动 Scanpy 审核](references/optimization.md)。
 
 ### 9.2 实际项目经验回迁：迭代与画图（0.10.0）
 
@@ -394,7 +408,7 @@ PYTHON_EXE=/path/to/python-3.9-or-newer bash tests/run_tests.sh
 
 This skill generates auditable projects from standard 10x RNA matrices and indexed per-cell ALLC files. It supports RNA-only, ALLC-only, and paired multiomics projects. Available routes include Scanpy/Harmony, MethSCAn VMR, per-sample and pooled DMR, hypo-DMR heatmaps, ALLCools feature construction, baseline MethylVI, and VMR plus all unique pooled-DMR MethylVI.
 
-Raw FASTQ and BAM processing are out of scope. No genome, sample label, cell count, filesystem path, Slurm node, or cluster annotation is assumed.
+The default analysis DAG starts from matrices or ALLC. The optional Bismark acceleration adapter supports explicit upstream FASTQ alignment; automatic FASTQ-to-ALLC handoff is not implemented. No genome, sample label, cell count, filesystem path, Slurm node, or cluster annotation is assumed.
 
 ### Install
 

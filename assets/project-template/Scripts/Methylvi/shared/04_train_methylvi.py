@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Train MethylVI on raw counts for ALLCools-retained 5-kb bins."""
+"""Train MethylVI on raw counts for a signed ALLCools, VMR or VMR+DMR input."""
 from __future__ import annotations
 
 import argparse
@@ -28,12 +28,17 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=int(os.environ["SCMO_BATCH_SIZE"]))
     parser.add_argument("--threads", type=int, default=int(os.environ["SCMO_THREADS"]))
     parser.add_argument("--seed", type=int, default=int(os.environ["SCMO_SEED"]))
+    parser.add_argument('--n-latent', type=int, default=int(os.environ.get('SCMO_MVI_N_LATENT', '20')))
+    parser.add_argument('--n-hidden', type=int, default=int(os.environ.get('SCMO_MVI_N_HIDDEN', '128')))
+    parser.add_argument('--n-layers', type=int, default=int(os.environ.get('SCMO_MVI_N_LAYERS', '1')))
     # Reads the configured split rather than assuming scvi's default, so methylvi.validation_fraction
     # is a live parameter. Soft default keeps the standalone routes working without the DAG's env.
     parser.add_argument("--validation-fraction", type=float,
                         default=float(os.environ.get("SCMO_VALIDATION_FRACTION", "0.1")))
     parser.add_argument("--accelerator", choices=("auto", "cpu", "gpu"), default="auto")
     args = parser.parse_args()
+    if min(args.n_latent, args.n_hidden, args.n_layers) < 1:
+        raise ValueError('model dimensions/layers must be positive')
     if not 0 < args.validation_fraction < 1:
         raise ValueError("validation-fraction must be between 0 and 1: %r" % args.validation_fraction)
     args.output.mkdir(parents=True, exist_ok=True)
@@ -57,7 +62,7 @@ def main() -> None:
         methylation_contexts=["mCG"], modalities={"batch_key": "mCG"},
     )
     model = METHYLVI(
-        mdata, n_latent=20, n_hidden=128, n_layers=1,
+        mdata, n_latent=args.n_latent, n_hidden=args.n_hidden, n_layers=args.n_layers,
         likelihood="betabinomial", dispersion="region",
     )
     accelerator = args.accelerator
@@ -72,6 +77,15 @@ def main() -> None:
         accelerator=accelerator, devices=1,
     )
     model.save(args.output / "model", overwrite=True, save_anndata=False)
+    # Preserve actual train/validation membership and histories for comparisons;
+    # equal split fractions alone do not prove identical held-out observations.
+    for split, indices in [('train', model.train_indices), ('validation', model.validation_indices), ('test', model.test_indices)]:
+        adata.obs.iloc[np.asarray(indices, dtype=int)].index.to_series().to_csv(
+            args.output / ('%s_cell_ids.tsv' % split), sep='\t', index=False, header=['cell_id'])
+    history_dir = args.output / 'training_history'
+    history_dir.mkdir(exist_ok=True)
+    for number, (name, history) in enumerate(model.history.items()):
+        history.to_csv(history_dir / ('%02d_%s.tsv' % (number, ''.join(c if c.isalnum() or c == '_' else '_' for c in name))), sep='\t')
     latent = np.asarray(model.get_latent_representation(batch_size=args.batch_size), dtype=np.float32)
     np.save(args.output / "methylvi_latent.npy", latent)
     embedding = ad.AnnData(X=latent, obs=adata.obs.copy())
@@ -87,6 +101,9 @@ def main() -> None:
         "batch_key": args.batch_key, "batch_levels": int(adata.obs[args.batch_key].nunique()),
         "accelerator": accelerator, "epochs_requested": args.epochs,
         "validation_fraction": args.validation_fraction,
+        "n_latent": args.n_latent, "n_hidden": args.n_hidden, "n_layers": args.n_layers,
+        "seed": args.seed, "batch_size": args.batch_size,
+        "training_history": str(history_dir),
     }
     (args.output / "run_summary.json").write_text(json.dumps(summary, indent=2) + "\n")
 

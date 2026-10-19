@@ -19,7 +19,7 @@ from pathlib import Path
 from _common import (
     HOST_ROLE_STANDALONE, HOST_ROLE_SUBMIT, TERMINAL_BAD_STATES, WorkflowError,
     effective_backend, host_role, host_role_source, load_environments, load_project, load_samples,
-    notebook_cells_digest,
+    notebook_cells_digest, execution_code_hashes,
     parse_memory_mb, parse_walltime_seconds, plan_data_sources, project_files, resolve_path,
     normalize_job_state, sha256_file, signature, stored_data_sources, write_json,
 )
@@ -402,7 +402,7 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
     all_rna_samples = [row for row in active if row["rna_path"]]
     all_allc_samples = [row for row in active if row["allc_root"]]
     use_rna = selected_routes is None or "scanpy" in selected_routes
-    use_allc = selected_routes is None or bool(selected_routes - {"scanpy"})
+    use_allc = selected_routes is None or bool(selected_routes - {"scanpy", "methylation_iteration"})
     rna_samples = all_rna_samples if use_rna else []
     allc_samples = all_allc_samples if use_allc else []
     if use_rna:
@@ -430,6 +430,11 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
         except (TypeError, ValueError):
             errors.append("analysis.methscan.vmr_thresholds values must be numeric")
     feature_targets = cfg.get("analysis", {}).get("methylvi", {}).get("feature_targets", [10000, 30000])
+    if selected_routes is None or any(name.startswith('methylvi_') for name in selected_routes):
+        for key, default in [('n_latent', 20), ('n_hidden', 128), ('n_layers', 1)]:
+            value = cfg.get('analysis', {}).get('methylvi', {}).get(key, default)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                errors.append('analysis.methylvi.%s must be a positive integer' % key)
     needs_features = selected_routes is None or bool(selected_routes & {
         "allcools", "methylvi_allcools", "methylvi_vmr", "methylvi_vmr_dmr",
     })
@@ -688,31 +693,33 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
         "allcools": bool(all_allc_samples), "methylvi_allcools": bool(all_allc_samples),
         "methylvi_vmr": bool(all_allc_samples), "methylvi_vmr_dmr": dmr_ready,
     }
+    # Explicit opt-in only: enabling a retained-artifact search must not make
+    # ordinary auto-route planning unexpectedly launch optimization jobs.
+    if selected_routes and 'methylation_iteration' in selected_routes:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from scautopilot.review.methylation import validate_spec, source_evidence
+        specs = cfg['analysis'].get('methylation_iteration', [])
+        try:
+            if not isinstance(specs, list) or not specs:
+                raise ValueError('analysis.methylation_iteration is empty')
+            for spec in specs:
+                source_evidence(files['root'], validate_spec(spec))
+            routes['methylation_iteration'] = True
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            errors.append('methylation iteration source: %s' % exc)
+            routes['methylation_iteration'] = False
     if allc_samples and not annotation_available:
         warnings.append("cell-type DMR routes are disabled until an annotation table is provided")
 
     rna_inventory = []
     for row in rna_samples:
         path = Path(row["rna_path"])
-        stat = path.stat()
-        rna_inventory.append({"path": str(path.resolve()), "size": stat.st_size, "mtime_ns": stat.st_mtime_ns})
-    code_hashes, code_suffixes = {}, {".py", ".sh", ".sbatch"}
-    for code_root in (files["root"] / "Scripts", files["root"] / "tools"):
-        if code_root.exists():
-            for path in sorted(item for item in code_root.rglob("*") if item.is_file() and item.suffix in code_suffixes):
-                code_hashes[str(path.relative_to(files["root"]))] = sha256_file(path)
-            # Notebooks are executable inputs, but outputs, execution counts and
-            # review metadata are not. Hash only cell type/source so a code-cell
-            # edit invalidates a frozen plan without making normal execution do so.
-            for path in sorted(code_root.rglob("*.ipynb")):
-                code_hashes[str(path.relative_to(files["root"]))] = notebook_cells_digest(path)
-    spec_root = files["root"] / "environment-specs"
-    if spec_root.exists():
-        for path in sorted(spec_root.glob("*.yaml")):
-            code_hashes[str(path.relative_to(files["root"]))] = sha256_file(path)
-    workflow_entry = files["root"] / "workflow.py"
-    if workflow_entry.is_file():
-        code_hashes[str(workflow_entry.relative_to(files["root"]))] = sha256_file(workflow_entry)
+        members = sorted(p for p in path.rglob("*") if p.is_file()) if path.is_dir() else [path]
+        for member in members:
+            stat = member.stat()
+            rna_inventory.append({"path": str(member.resolve()), "size": stat.st_size,
+                                  "mtime_ns": stat.st_mtime_ns, "ctime_ns": stat.st_ctime_ns})
+    code_hashes = execution_code_hashes(files["root"])
     code_signature = signature(code_hashes)
     payload = {
         "status": "invalid" if errors else "valid", "schema_version": 2,

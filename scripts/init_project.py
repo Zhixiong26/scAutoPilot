@@ -33,6 +33,9 @@ RUNTIME_TOOLS = (
     "figures_comparison_evidence.py", "record_figure_review.py",
     "prepare_scanpy_candidate_reference.py",
     "optimization_state.py",
+    "run_methylation_iteration.py",
+    "propose_methylvi_trial.py",
+    "bootstrap_acceleration.py", "run_accelerated.py", "run_vmrseq_cpu.R",
 )
 
 # Reference files the skill ships so a methylation project needs no reference
@@ -92,6 +95,7 @@ DEFAULT_ANALYSIS = {
     "methylvi": {
         "feature_targets": [10000, 30000], "epochs": 500, "batch_size": 32,
         "seed": 0, "validation_fraction": 0.1,
+        "n_latent": 20, "n_hidden": 128, "n_layers": 1,
         "supervised_umap_weights": [0.2, 0.5, 0.7, 0.9],
     },
     "task_commands": {},

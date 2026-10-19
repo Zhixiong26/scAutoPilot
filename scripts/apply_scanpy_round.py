@@ -60,7 +60,7 @@ def _apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> D
         raise ApplyError("round plan digest does not match its contents")
     if not plan.get("frozen") or plan.get("status") != "next_candidate":
         raise ApplyError("round is not a frozen next_candidate plan")
-    if plan.get('schema_version') != 2 or not plan.get('analysis_config_digest'):
+    if plan.get('schema_version') not in {2, 3} or not plan.get('analysis_config_digest'):
         raise ApplyError('legacy round lacks a complete config binding; review in a new session')
     if plan.get('session_id') != session_id or plan.get('round_id') != round_id:
         raise ApplyError('round identity differs from its location')
@@ -71,11 +71,28 @@ def _apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> D
     if diff.get("parameter") not in {"n_pcs", "n_neighbors", "resolution", "min_dist"}:
         raise ApplyError("round does not contain one legal MVP parameter change")
     current = plan['current_parameters']
-    expected = dict(current)
+    base = plan.get('base_parameters', current) if plan['schema_version'] == 3 else current
+    if plan['schema_version'] == 3:
+        base_path = Path(plan.get('base_state_path', '')).resolve()
+        session_root = round_root.parent.resolve()
+        if base_path.parent.parent != session_root or base_path.name != 'state.json':
+            raise ApplyError('base state must belong to this optimization session')
+        base_state = load(base_path)
+        if (config_digest(base_state) != plan.get('base_state_digest') or
+                base_state.get('parameters') != base or base_state.get('run_id') != plan.get('base_run_id') or
+                base_state.get('pca_n_comps') != plan.get('base_pca_n_comps')):
+            raise ApplyError('incumbent base state differs from frozen plan')
+        current_state = load(round_root / 'state.json')
+        if (config_digest(current_state) != plan.get('review_state_digest') or
+                base_state.get('fixed_science') != current_state.get('fixed_science') or
+                base_state.get('code_signature') != current_state.get('code_signature') or
+                base_state.get('benchmark') != current_state.get('benchmark')):
+            raise ApplyError('incumbent restoration would change fixed science or evaluation')
+    expected = dict(base)
     expected[diff['parameter']] = diff.get('new_value')
     if (set(current) != {'n_pcs', 'n_neighbors', 'resolution', 'min_dist'} or
-            diff.get('old_value') != current[diff['parameter']] or
-            expected != plan.get('next_parameters') or expected == current):
+            set(base) != set(current) or diff.get('old_value') != base[diff['parameter']] or
+            expected != plan.get('next_parameters') or expected == base):
         raise ApplyError('round diff and next_parameters disagree or change more than one axis')
     if next_run_id == plan.get('parent_run_id') or (project / '.workflow/runs' / next_run_id).exists() or (
             project / 'Results/runs' / next_run_id).exists():
@@ -126,6 +143,14 @@ def _apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> D
     if observed != current:
         raise ApplyError("analysis.yaml has drifted from the frozen round's current parameters")
     before = json.loads(json.dumps(document))
+    if plan['schema_version'] == 3:
+        # Explicit restoration is not another scientific perturbation. The
+        # candidate changes one adjacent axis relative to this frozen base.
+        scanpy['pca']['n_comps'] = plan['base_pca_n_comps']
+        scanpy['neighbors']['n_pcs'] = base['n_pcs']
+        scanpy['neighbors']['n_neighbors'] = base['n_neighbors']
+        scanpy['leiden']['resolution'] = base['resolution']
+        scanpy['umap']['min_dist'] = base['min_dist']
     new_value = diff["new_value"]
     if diff["parameter"] == "n_pcs":
         scanpy["pca"]["n_comps"] = new_value
@@ -142,6 +167,8 @@ def _apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> D
     record = {"schema_version": 1, "applied_at": datetime.now(timezone.utc).isoformat(),
               "plan": str(plan_path), "plan_digest": plan["plan_digest"],
               "next_run_id": next_run_id, "parameter_diff": diff,
+              "base_run_id": plan.get('base_run_id', plan.get('parent_run_id')),
+              "restore_incumbent": plan.get('restore_incumbent', False),
               "analysis_before_sha256": config_digest(before),
               "analysis_after_sha256": config_digest(document)}
     # Save auditable before/after snapshots beside the immutable decision, then

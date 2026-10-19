@@ -15,7 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 from _common import (WorkflowError, host_role, host_role_source, load_project, login_execution_ack,
                      login_host_refusal, signature, slurm_allocation_id, submit_host_execution_allowed,
-                     task_override, validate_recorded_outputs, write_json)  # noqa: E402
+                     task_override, validate_recorded_outputs, write_json,
+                     runtime_identity, seal_recorded_outputs, update_results_index)  # noqa: E402
 
 
 def render_command(command, variables):
@@ -97,6 +98,8 @@ def main() -> int:
         raise WorkflowError("task is not uniquely defined in plan: %s" % args.task)
     item = matches[0]
     cfg = load_project(root)
+    if plan.get("runtime_identity") is not None and runtime_identity(root) != plan["runtime_identity"]:
+        raise WorkflowError("executable source or configuration changed after planning; create a new run-id")
     commands = cfg["analysis"].get("task_commands") or {}
     command = task_override(commands, args.task)
     internal_summary = args.task == "workflow_summary" and command is None
@@ -137,6 +140,8 @@ def main() -> int:
             state["process_return_code"] = process_code
             code = process_code
             outputs = validate_outputs(item, variables) if process_code == 0 else []
+            if process_code == 0:
+                seal_recorded_outputs(outputs)
     except (OSError, ValueError, WorkflowError) as exc:
         code, outputs = 1, []
         state["failure_stage"] = "output_validation" if state.get("process_return_code") == 0 else "execution"
@@ -148,6 +153,26 @@ def main() -> int:
     write_json(task_dir / "task_status.json", state)
     if code == 0:
         (task_dir / "task.COMPLETE").touch()
+    # Both success and handled failure publish a status; a failed task never
+    # advertises unvalidated scientific files as completed artifacts.
+    if code in (0, 1) or state['status'] == 'failed':
+        try:
+            result = Path(variables['result_dir'])
+            results_root = next((p for p in result.parents if p.name == 'Results'), None)
+            if results_root is not None:
+                artifacts = list(outputs) + [str(task_dir / 'task_status.json')]
+                for path in outputs:
+                    if Path(path).name == 'task_outputs.json':
+                        artifacts.extend(json.loads(Path(path).read_text())['artifacts'])
+                update_results_index(results_root, args.run_id, args.task, artifacts,
+                                     status=state['status'], finished_at=state['finished_at'])
+        except (OSError, ValueError, WorkflowError) as exc:
+            # Documentation failure is not a request to repeat scientific work.
+            print('WARNING: result index update failed: %s' % exc, file=sys.stderr)
+            try:
+                write_json(task_dir / 'index_update_warning.json', {'error': str(exc), 'science_status': state['status']})
+            except OSError:
+                pass
     return code
 
 

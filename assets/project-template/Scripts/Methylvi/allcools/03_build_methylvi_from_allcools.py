@@ -175,7 +175,22 @@ def main() -> None:
         f"{feature}\t{row.chrom}\t{int(row.start)}\t{int(row.end)}"
         for feature, row in regions.iterrows()
     ]
+    table = pd.read_csv(args.allc_table, sep="\t", header=None, names=["cell_id", "path"], dtype=str)
+    if table["cell_id"].duplicated().any():
+        raise ValueError("ALLC table contains duplicate cell IDs")
+    allc_index = table.set_index("cell_id")["path"].to_dict()
+    missing = [cell for cell in cells if cell not in allc_index]
+    if missing:
+        raise FileNotFoundError(f"No ALLC matched {len(missing)} selected cells; first: {missing[:5]}")
+    source_inventory = []
+    for cell in cells:
+        path = Path(allc_index[cell]).resolve()
+        stat = path.stat()
+        source_inventory.append(f"{cell}\t{path}\t{stat.st_size}\t{stat.st_mtime_ns}\t{stat.st_ctime_ns}")
     manifest = {
+        "source_identity_version": 1,
+        "allc_table_sha256": hashlib.sha256(args.allc_table.read_bytes()).hexdigest(),
+        "allc_source_stat_sha256": digest_values(source_inventory),
         "h5ad": str(args.h5ad.resolve()), "cells": len(cells), "features": len(features),
         "cell_sha256": digest_values(cells),
         "feature_sha256": digest_values(feature_coordinates),
@@ -185,6 +200,8 @@ def main() -> None:
     args.work_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = args.work_dir / "manifest.json"
     rows_present = list(args.work_dir.glob("*.npz"))
+    if args.output.exists() and not manifest_path.is_file():
+        raise RuntimeError('Existing H5MU has no source manifest; use a new output/work directory')
     if manifest_path.exists():
         if json.loads(manifest_path.read_text()) != manifest:
             raise RuntimeError(f"Checkpoint manifest differs: use a new work directory: {args.work_dir}")
@@ -194,10 +211,12 @@ def main() -> None:
         manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
 
     shape = (len(cells), len(regions))
+    manifest_digest = hashlib.sha256(json.dumps(manifest, sort_keys=True).encode()).hexdigest()
     if args.output.is_file() and args.output.stat().st_size > 0:
         existing = mudata.read_h5mu(args.output, backed="r")
         compatible = (
-            "mCG" in existing.mod
+            existing.uns.get('input_manifest_sha256') == manifest_digest
+            and "mCG" in existing.mod
             and existing["mCG"].shape == shape
             and {"mc", "cov"}.issubset(existing["mCG"].layers)
             and digest_values(existing["mCG"].obs_names.astype(str).tolist()) == manifest["cell_sha256"]
@@ -214,13 +233,6 @@ def main() -> None:
         print(f"Existing compatible H5MU detected: {args.output}")
         return
 
-    table = pd.read_csv(args.allc_table, sep="\t", header=None, names=["cell_id", "path"], dtype=str)
-    if table["cell_id"].duplicated().any():
-        raise ValueError("ALLC table contains duplicate cell IDs")
-    allc_index = table.set_index("cell_id")["path"].to_dict()
-    missing = [cell for cell in cells if cell not in allc_index]
-    if missing:
-        raise FileNotFoundError(f"No ALLC matched {len(missing)} selected cells; first: {missing[:5]}")
     row_paths, tasks = [], []
     for row_index, cell in enumerate(cells):
         token = hashlib.sha1(cell.encode(), usedforsecurity=False).hexdigest()[:10]
@@ -272,6 +284,7 @@ def main() -> None:
     counts.layers["mc"] = np.asarray(mc)
     counts.layers["cov"] = np.asarray(cov)
     output = mudata.MuData({"mCG": counts})
+    output.uns['input_manifest_sha256'] = manifest_digest
     args.output.parent.mkdir(parents=True, exist_ok=True)
     temporary = args.output.with_suffix(".tmp.h5mu")
     temporary.unlink(missing_ok=True)

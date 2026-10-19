@@ -1,10 +1,71 @@
 # Template maintenance
 
+Version 0.15.0 adds `bootstrap_acceleration.py`, `run_accelerated.py` and
+`run_vmrseq_cpu.R` to generated runtime tools. External packages stay outside the
+skill and are inventoried by SHA-256. MethSCAn opt5 CPU uses the existing DAG
+through an explicit environment row; Bismark and vmrseq are standalone adapters,
+not new default DAG routes. No automatic environment replacement occurs. These
+new runtime files change code signatures; upgrade idle projects only, revalidate
+and create new plans. Keep active projects and frozen historical runs unchanged.
+
+Version 0.14.1 extends the task completion index hook to handled failures and
+explicit cross-project master targets. Distribute `_common.py` and `run_task.py`
+together; runtime identity changes require a new plan. Frozen historical runs
+remain unchanged. Configure presentation routing in Results/index_targets.json;
+test local and master writes before submission. No monitoring daemon is added.
+
+Version 0.14.0 adds the optional `propose_methylvi_trial.py` runtime tool and the
+literature-method reference. It uses an isolated optional Optuna dependency;
+existing analysis environments/controllers and config schemas are unchanged.
+Distribute the tool with the generator for new projects. Copying it to a generated
+project changes runtime identity: upgrade idle executors only and make new plans.
+The bridge validates protocol/file bindings, not scientific truth or DAG completion;
+it never submits, trains, modifies analysis config or approves models. Other
+published methods remain explicitly external protocols, not installed adapters.
+
+Version 0.13.0 adds `scautopilot/review/methylation.py`,
+`run_methylation_iteration.py`, planner/validator/task-adapter route support and
+configurable MethylVI capacity/history exports. Distribute these together with
+the existing search module and task evidence helpers. The new route is explicit
+opt-in and artifact-only, not a raw-data pipeline or training daemon. Project
+schema remains v2; runtime signatures change. Upgrade idle/new runtimes only and
+use new plans. Synchronizing skill copies does not upgrade project executors.
+Failed iteration directories are preserved and require a fresh run.
+
+Version 0.12.0 changes review selection semantics and adds
+`scautopilot/review/search.py`. Distribute it with controller, benchmark, backend,
+`optimization_state.py` and `apply_scanpy_round.py`. New round plans are schema v3
+with explicit incumbent restoration; complete v2 plans retain their old apply
+contract, but old sessions cannot be continued under the new policy. The new
+`selection` settings default safely when absent. Project configuration remains
+schema v2. Upgrade only idle maintenance roots; if jobs use independent frozen
+runtime copies, verify that isolation before upgrading the parent. Never replace
+their scripts/config or revise historical hashes. New code requires new plans
+and a fresh optimization session; copying the installed skill alone does not
+upgrade a generated runtime. The executor still performs full Notebook replay.
+
+Version 0.11.1 adds the fourth DMR heatmap (`zscore_mean.png`) and its support
+tables to rendering, task evidence, summaries and comparison collection.
+Runtime signatures change. Upgrade only idle projects and create a new plan;
+old three-view deliveries remain historical evidence, not four-view deliveries.
+Do not modify frozen runtimes of active projects. Configuration stays schema v2.
+
 Keep algorithm scripts in stage directories, remove site paths and sample labels, and route project values through configuration or explicit CLI/environment inputs. Record source-to-template mapping in `migration-inventory.tsv`. Replace static Slurm resources with scheduler profiles.
 
 Two document contracts exist and are not interchangeable. The root `README.md` is written once by `init_project.py` from the intake and the resolved configuration, and is never rewritten with runtime state; the root `Report.md` run log is owned by `build_report_text()` in `tools/_common.py` and grows one record per run. The module documents under `Scripts/<Module>/` follow the same split one level down: the stage READMEs and the prose of the stage Reports are ported verbatim from the template and bound to the project once by `adapt_stage_docs()`, and the stage Reports' run-log regions are written by `refresh_stage_run_logs()`. See [documentation](documentation.md) for the ownership rules and `references/scanpy.md` for why the template's own sample names stay in its prose.
 
-Know what the execution signature covers before copying tools into a live project. `code_signature` hashes `.py`, `.sh`, and `.sbatch` files under `Scripts/` and `tools/`, notebook cell types/sources under those directories, `environment-specs/*.yaml`, and `workflow.py`; markdown files are outside it. Notebook outputs, execution counts and metadata are excluded. Appending to a Report therefore cannot invalidate a recorded plan, but copying newer runtime code or notebook sources changes `code_signature`, which changes `input_signature`, orphans recorded full validations, and prevents an in-flight run from resuming until it is re-validated. Document that consequence in the release notes instead of leaving it to be discovered.
+Know what the execution signature covers before copying tools into a live project. `code_signature` hashes `.py`, `.sh`, `.sbatch`, `.R` and `.r` files under `Scripts/` and `tools/`, notebook cell types/sources under those directories, `environment-specs/*.yaml`, and `workflow.py`; markdown files are outside it. Notebook outputs, execution counts and metadata are excluded. Appending to a Report therefore cannot invalidate a recorded plan, but copying newer runtime code or notebook sources changes `code_signature`, which changes `input_signature`, orphans recorded full validations, and prevents an in-flight run from resuming until it is re-validated. Document that consequence in the release notes instead of leaving it to be discovered.
+
+Version 0.11.2 adds `runtime_identity` and `plan_identity_version: 2` to new plans.
+Task startup checks the source/config manifest before executing or replacing task
+status. Legacy plans remain readable but do not gain this protection retroactively.
+Figure delivery hashes the immutable projection of new plans, excluding scheduler
+bookkeeping. Existing legacy figure manifests keep their original file-hash rule.
+RNA directories now inventory files (resolved path, size, nanosecond mtime/ctime),
+not just directory stat; this is metadata identity, not a content-checksum claim.
+New task-output records are sealed with artifact identities; legacy records remain
+existence-only unless their specialized validator supplies stronger evidence.
+Do not manufacture new identity evidence for old files without a separate audit.
 
 Do not package logs, results, checkpoints, notebook output, credentials, Python caches, legacy uppercase `Config`, or dynamic state. The project generator must ignore `__pycache__`, bytecode, test caches, notebook checkpoints, OS metadata, and stale pre-schema-v2 configuration directories even when they exist in the installed skill checkout. Increment `VERSION` for releases and keep schema compatibility within a minor version.
 

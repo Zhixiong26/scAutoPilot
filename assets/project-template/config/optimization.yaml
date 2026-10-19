@@ -117,6 +117,13 @@
       "accept_threshold": 0.8,
       "escalate_threshold": 0.8
     },
+    "selection": {
+      "absolute_tolerance": 0.01,
+      "relative_db_tolerance": 0.05,
+      "min_improvement": 0.005,
+      "max_small_cluster_fraction_increase": 0.02,
+      "rare_label_f1_tolerance": 0.05
+    },
     "stopping": {
       "max_iterations": 20,
       "max_no_improvement": 5,

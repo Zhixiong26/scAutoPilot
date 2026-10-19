@@ -1,5 +1,19 @@
 # MethSCAn workflow / MethSCAn 流程（整理版）
 
+## Iterative improvement / 自迭代
+
+Use the explicit `methylation_iteration` DAG route with
+`analysis.methylation_iteration` specs for completed VMR H5ADs. It screens retained
+PCs/neighbors/Leiden before layout, checks incumbent and baseline regressions,
+and confirms graph/partition stability. It does not redo imputation/PCA, change
+cell QC, discover VMRs or optimize DMR significance. Those require separate
+planned experiments. Source artifacts stay read-only; new run-scoped outputs
+include comparison metrics, seed checks, selected representation and figures.
+
+先复用已核验 VMR 表示筛选邻居图与聚类，再优化布局；保留最佳版本和失败证据。
+特征/覆盖/imputation 需要变化时另开有预算的实验，不重复转换不受影响的 ALLC。
+DMR 阈值不参与美化图形的自动搜索。计算完成不代表生物学/注释审核通过。
+
 This directory is numbered in execution order and resolves the filename conflict between the two `02` scripts of the previous version. / 本目录按执行顺序编号，解决旧版两个 `02` 文件名冲突：
 
 ```text
@@ -82,6 +96,7 @@ Default inputs are the configured ALLC source directory (example/示例: `Data/A
 6. `08_hypo_dmr_heatmaps.py`: performs an isolated raw-p fallback only for the known `calc_fdr` division-by-zero failure; determines the hypo cell type from column 10, keeps DMRs with raw p `<0.01` and between-group mean ratio difference `>=0.25`, and takes the Top200 per cell type in descending difference order before merging overlapping intervals. / `08_hypo_dmr_heatmaps.py`：仅对已知 `calc_fdr` 除零错误执行隔离的 raw-p fallback；按第 10 列确定 hypo 细胞类型，保留 raw p `<0.01`、组间 mean ratio 差值 `>=0.25` 的 DMR，并按差值降序为每种细胞取 Top200 后合并重叠区间。
 7. The same script computes the single-cell × merged-DMR matrix from `01_cov/cov/*.cov.gz`. Each value is the equal-weight arithmetic mean of the unique CpG ratio inside the DMR; missing coverage is `NA`. / 同一脚本从 `01_cov/cov/*.cov.gz` 计算单细胞×合并 DMR 矩阵。每个值是 DMR 内 unique CpG ratio 的等权算术平均，缺覆盖为 `NA`。
 8. Per sample, only cell types assigned at least one of their own hypo-DMRs are kept as heatmap rows, producing `mean_ratio.png`, DMR-wise `zscore.png`, and `zscore_colorbar_compressed.png`. The compressed-colorbar figure keeps the original z-score values and only sets the color range to `[-1,1]`; the ordinary z-score figure displays the range `[-3,3]` by default. / 每个样本只保留至少分配到一个自身 hypo-DMR 的 cell type 作为热图行，生成 `mean_ratio.png`、DMR-wise `zscore.png` 和 `zscore_colorbar_compressed.png`。压缩 colorbar 图保留原 z-score 数值，只将颜色范围设为 `[-1,1]`；普通 z-score 图显示范围默认 `[-3,3]`。
+   Fourth required view / 必需的第四种图：`zscore_mean.png` averages saved single-cell Z-scores within each cell type, without re-standardizing means. Require at least 3 observed cells per type/DMR; otherwise mask as NA. Export `zscore_mean.tsv`, `zscore_mean_observed_cells.tsv` and `zscore_mean_matrices.npz`. / 按 cell type 对单细胞 Z-score 求均值，不二次标准化；每类型×DMR 至少 3 个有效细胞，否则保留 NA；导出均值和有效细胞数。均值图默认色阶 ±1；同一四图规则适用于逐样本及 pooled 展示，不能以此声称供者级疾病推断。
 9. `methscan scan → matrix → 04_vmr_scanpy.py`: run separately for each of the three VMR threshold branches, `0.01`/`0.02`/`0.05`. / `methscan scan → matrix → 04_vmr_scanpy.py`：对 0.01/0.02/0.05 三个 VMR threshold 分支分别运行。
 10. `05_summarize_run.py`: validates pairwise meth-diff, the hypo-DMR figures, and the three VMR branches, then generates the summary. / `05_summarize_run.py`：验证 pairwise meth-diff、hypo-DMR 图和三个 VMR 分支后生成 summary。
 
@@ -102,6 +117,10 @@ Default inputs are the configured ALLC source directory (example/示例: `Data/A
 ├── 11_hypo_DMR_heatmaps/samples/<sample>/mean_ratio.png
 ├── 11_hypo_DMR_heatmaps/samples/<sample>/zscore.png
 ├── 11_hypo_DMR_heatmaps/samples/<sample>/zscore_colorbar_compressed.png
+├── 11_hypo_DMR_heatmaps/samples/<sample>/zscore_mean.png
+├── 11_hypo_DMR_heatmaps/samples/<sample>/zscore_mean.tsv
+├── 11_hypo_DMR_heatmaps/samples/<sample>/zscore_mean_observed_cells.tsv
+├── 11_hypo_DMR_heatmaps/samples/<sample>/zscore_mean_matrices.npz
 ├── pooled/07_methdiff/samples/<pooled-label>/comparisons/
 ├── pooled/07_methdiff/pairwise_summary.tsv
 ├── pooled/07_methdiff/pairwise_summary.json

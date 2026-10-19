@@ -27,6 +27,7 @@ from .visual import (
 )
 from .visual_backend import openai_compatible_visual_backend, visual_command_backend
 from optimization_state import exclusive_lock, identifier, mapping
+from .search import plan_search, rerun_scope, validate_selection
 
 
 class ReviewError(RuntimeError):
@@ -113,7 +114,7 @@ def _metric_vector(state: Mapping[str, Any]) -> Dict[str, Optional[float]]:
     }
 
 
-def _previous(session_root: Path, current: Mapping[str, Any], epsilon: float) -> Tuple[Optional[Dict[str, Any]], int]:
+def _previous(session_root: Path, current: Mapping[str, Any]) -> Tuple[Optional[Dict[str, Any]], int]:
     rounds = sorted(path for path in session_root.glob("round_*") if path.is_dir())
     if not rounds:
         return None, 0
@@ -130,7 +131,7 @@ def _previous(session_root: Path, current: Mapping[str, Any], epsilon: float) ->
         raise ReviewError('fixed science, code or optimization policy changed; start a new session')
     expected_pca = (prior_plan['next_parameters']['n_pcs']
                     if (prior_plan.get('parameter_diff') or {}).get('parameter') == 'n_pcs'
-                    else prior_state.get('pca_n_comps'))
+                    else prior_plan.get('base_pca_n_comps', prior_state.get('pca_n_comps')))
     if current.get('pca_n_comps') != expected_pca:
         raise ReviewError('PCA capacity changed outside the planned logical axis')
     if prior_state.get('benchmark') != current.get('benchmark'):
@@ -150,18 +151,8 @@ def _previous(session_root: Path, current: Mapping[str, Any], epsilon: float) ->
         "new_value": diff.get("new_value"),
         "metric_delta": delta,
     }
-    # Direction-aware evidence only for the no-improvement safety stop; it is
-    # not an optimization score and never merges the two reviewers.
-    keys = ['trustworthiness', 'knn_preservation', 'silhouette', 'ilisi']
-    if prior_state['biology'].get('independent') and current['biology'].get('independent'):
-        keys.append('celltype_asw')
-    improvements = [delta[key] for key in keys if delta[key] is not None]
-    if delta["davies_bouldin"] is not None:
-        improvements.append(-delta["davies_bouldin"])
-    improved = any(value > epsilon for value in improvements)
-    prior_decision = _load(rounds[-1] / "decision.json")
-    prior_streak = int(prior_decision.get("no_improvement_streak", 0))
-    return previous, 0 if improved else prior_streak + 1
+    # Patience is measured against the incumbent, not the latest rejected run.
+    return previous, 0
 
 
 def _questions(state_path: Path) -> Dict[str, Any]:
@@ -348,14 +339,40 @@ def _review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str,
                  run_dir / 'tasks/scanpy/task_status.json', runner_path,
                  project / 'config/analysis.yaml', project / 'config/optimization.yaml',
                  project / 'config/project.yaml', project / 'config/samples.tsv']
+    session_root = project / '.workflow/optimization' / session_id
+    history = []
+    for prior in sorted(session_root.glob('round_*')):
+        if not prior.is_dir():
+            continue
+        prior_state, prior_decision = _load(prior / 'state.json'), _load(prior / 'decision.json')
+        if not prior_decision.get('search'):
+            raise ReviewError('legacy iteration policy requires a new session')
+        if prior_decision.get('status') != 'next_candidate':
+            raise ReviewError('preceding round stopped or requires review; start an explicit new session')
+        prior_plan = _load(prior / 'round_plan.json')
+        applied = _load(prior / 'applied.json')
+        if (prior_plan.get('plan_digest') != _digest({key: value for key, value in prior_plan.items() if key != 'plan_digest'}) or
+                prior_plan.get('review_state_digest') != _digest(prior_state) or
+                prior_plan.get('decision') != prior_decision or applied.get('plan_digest') != prior_plan.get('plan_digest')):
+            raise ReviewError('frozen round state/decision/plan identity changed: %s' % prior)
+        history.append({'state': prior_state, 'decision': prior_decision})
+        protected.extend(prior / name for name in ('state.json', 'decision.json', 'round_plan.json', 'applied.json'))
+    reference_state = history[0]['state'] if history else None
+    reference = Path(reference_state['evidence']['candidate_h5ad']) if reference_state else candidate
+    reference_pcs = reference_state['parameters']['n_pcs'] if reference_state else parameters['n_pcs']
+    for item in history:
+        source = Path(item['state']['evidence']['candidate_h5ad'])
+        if source == reference or item['state']['run_id'] == history[-1]['decision']['search']['incumbent_run_id']:
+            if sha256_file(source) != item['state']['evidence']['source_sha256'].get(str(source)):
+                raise ReviewError('historical candidate changed; refusing reuse: %s' % source)
+            protected.append(source)
+    selection = validate_selection(mvp.get('selection') or {})
     source_hashes = {str(path): sha256_file(path) for path in protected}
     from .benchmark import calculate_scanpy_benchmarks
     settings = mvp.get('benchmark') or {}
     benchmark = calculate_scanpy_benchmarks(candidate, parameters,
         int(settings.get('max_cells', 5000)), int(settings.get('evaluation_k', 15)),
-        int(settings.get('seed', 0)))
-    if max(grids["n_pcs"]) >= min(benchmark["dataset"]["n_cells"], benchmark["dataset"]["n_genes"]):
-        raise ReviewError("n_pcs grid is not executable for this dataset's cell/feature dimensions")
+        int(settings.get('seed', 0)), reference_h5ad=reference, reference_n_pcs=reference_pcs)
     state = {"schema_version": 1, "run_id": run_id, "parameters": parameters,
              "dataset": benchmark["dataset"], "embedding": benchmark["embedding"],
              "clustering": benchmark["clustering"], "biology": benchmark["biology"],
@@ -369,9 +386,8 @@ def _review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str,
              "evidence": {'source_sha256': source_hashes, "run_summary": str(summary_path), "parameters": str(sidecar_path),
                           "candidate_h5ad": str(candidate)}}
 
-    session_root = project / ".workflow" / "optimization" / session_id
     stopping = mvp.get("stopping") or {}
-    previous, no_improvement = _previous(session_root, state, float(stopping.get("metric_epsilon", 0.001)))
+    previous, _ = _previous(session_root, state)
     state["previous"] = previous
     round_index = len([path for path in session_root.glob("round_*") if path.is_dir()])
     round_root = session_root / ("round_%03d" % round_index)
@@ -433,39 +449,34 @@ def _review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str,
     direction = judgments["direction"]["selected"]
     accept = float(judgments["accept"]["probability_yes"])
     escalate = float(judgments["escalate"]["probability_yes"])
-    max_iterations = int(stopping.get("max_iterations", 20))
-    max_no_improvement = int(stopping.get("max_no_improvement", 5))
-    reason = None
-    if round_index + 1 >= max_iterations:
-        reason = "max_iterations"
-    elif no_improvement >= max_no_improvement:
-        reason = "max_no_improvement"
-    elif escalate >= float(threshold_policy.get("escalate_threshold", 0.8)) or parameter == "escalate":
-        reason = "escalate"
-    elif accept >= float(threshold_policy.get("accept_threshold", 0.8)):
-        reason = "accepted"
-    elif parameter == "none" or direction == "keep":
-        reason = "no_change"
-
-    next_parameters = dict(parameters)
-    diff = None
-    if reason is None:
-        value = _step(list(grids[parameter]), parameters[parameter], direction)
-        if value is None:
-            reason = "parameter_bound"
-        else:
-            next_parameters[parameter] = value
-            diff = {"parameter": parameter, "parameter_ids": list(PARAMETER_IDS[parameter]),
-                    "direction": direction, "old_value": parameters[parameter], "new_value": value}
-    status = "next_candidate" if diff else "stopped" if reason in {"accepted", "max_iterations", "max_no_improvement", "no_change"} else "review_required"
-    decision = {"schema_version": 1, "status": status, "reason": reason,
-                "no_improvement_streak": no_improvement, "selected_parameter": parameter,
-                "selected_direction": direction, "accept_probability": accept,
+    search, incumbent, next_parameters, diff, reason = plan_search(
+        state, history, grids, selection, stopping, parameter, direction)
+    status = 'next_candidate' if diff else 'stopped'
+    if escalate >= float(threshold_policy.get('escalate_threshold', 0.8)) or parameter == 'escalate':
+        reason, status, diff, next_parameters = 'escalate', 'review_required', None, dict(parameters)
+    if diff:
+        diff['parameter_ids'] = list(PARAMETER_IDS[diff['parameter']])
+    decision = {"schema_version": 2, "status": status, "reason": reason,
+                "no_improvement_streak": search['no_improvement_streak'],
+                "selected_parameter": diff['parameter'] if diff else None,
+                "selected_direction": diff['direction'] if diff else None,
+                "model_proposed_parameter": parameter, "model_proposed_direction": direction,
+                "accept_probability": accept, "acceptance_role": 'advisory_only',
+                "search": search,
                 "escalate_probability": escalate, "backend": judgments["backend"]}
-    plan = {"schema_version": 2, "frozen": True, "session_id": session_id,
+    plan = {"schema_version": 3, "frozen": True, "session_id": session_id,
             "round_id": round_root.name, "parent_run_id": run_id,
             "created_at": datetime.now(timezone.utc).isoformat(), "status": status,
             "current_parameters": parameters, "next_parameters": next_parameters,
+            'base_parameters': incumbent['parameters'], 'base_run_id': incumbent['run_id'],
+            'base_pca_n_comps': incumbent['pca_n_comps'],
+            'base_state_path': str(state_path if incumbent['run_id'] == run_id else next(
+                prior / 'state.json' for prior in sorted(session_root.glob('round_*'))
+                if prior.is_dir() and _load(prior / 'state.json')['run_id'] == incumbent['run_id'])),
+            'base_state_digest': _digest(incumbent),
+            'review_state_digest': _digest(state),
+            'restore_incumbent': parameters != incumbent['parameters'] or state['pca_n_comps'] != incumbent['pca_n_comps'],
+            'execution_scope': rerun_scope(diff['parameter'] if diff else None),
             "parameter_diff": diff, "decision": decision,
             "fixed": mvp.get("fixed") or {},
             'analysis_config_digest': _digest(analysis_doc),
@@ -481,7 +492,8 @@ def _review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str,
     try:
         for filename, value in [('visual_review.json', visual_review), ('state.json', state),
                 ('questions.json', request), ('backend_audit.json', backend_audit),
-                ('judgments.json', judgments), ('decision.json', decision), ('round_plan.json', plan)]:
+                ('judgments.json', judgments), ('decision.json', decision), ('round_plan.json', plan),
+                ('selection_summary.json', search)]:
             _write_immutable(attempt / filename, value)
         if round_root.exists():
             raise ReviewError('round already exists: %s' % round_root)
@@ -491,4 +503,5 @@ def _review_scanpy_run(project: Path, run_id: str, session_id: str) -> Dict[str,
             shutil.rmtree(attempt)
     return {"session_id": session_id, "round_id": round_root.name, "status": status,
             "reason": reason, "backend": judgments["backend"], "degraded_reason": backend_error,
+            'incumbent_run_id': search['incumbent_run_id'], 'final_review_required': True,
             "parameter_diff": diff, "round_plan": str(round_root / "round_plan.json")}

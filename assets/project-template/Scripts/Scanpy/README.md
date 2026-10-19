@@ -305,9 +305,13 @@ Every iteration round follows / 每轮迭代遵循：
 6. Accept the candidate as the new baseline only when the target defect improved and markers, QC, sample structure, rare populations and stability did not visibly degrade. 只有目标缺陷改善，且 marker、QC、样本结构、稀有群和稳定性没有明显退化时，才接受候选为新基线。
 7. Update `Report.md` and keep examining the new baseline; start another round when evidence still supports further optimization. 更新 `Report.md`，继续检查新基线；仍有证据支持的优化空间时进入下一轮。
 
-Parameter optimization is considered converged when: the final annotation UMAP has no obvious structural problem that parameters could fix; markers and neighbourhood evidence agree; two consecutive candidate rounds brought no substantial improvement; or further adjustment only changes the visual layout without improving the analytical evidence.
+The automatic controller searches around the explicit incumbent with one adjacent change, science parameters first and layout second. Model acceptance is advisory; a candidate needs material improvement without unacceptable regression against both incumbent and initial baseline. Frozen evaluation space/cell IDs and independent-label safeguards support comparison, but do not replace marker, QC and seed-stability review.
 
-参数优化在以下情况视为收敛：最终注释 UMAP 没有可由参数修正的明显结构问题；marker 与邻域证据一致；连续两轮候选均未带来实质改善；或继续调整只改变视觉布局而不改善分析证据。
+自动控制器围绕明确保留的最佳候选做单轴相邻搜索，先 PCA/邻居图/分辨率，后 UMAP 布局。模型接受分数仅作建议；候选需有实质改善，且相对最佳候选、初始基线均无不可接受退化。固定评估空间及全部细胞/特征/元数据身份；拒绝的候选保留，下一轮显式回到最佳候选。范围外的 QC、HVG、Harmony 等变更另建实验，不混入四轴会话。
+
+停止条件由 `config/optimization.yaml` 的预算、patience、局部候选耗尽和升级审核共同决定，不再采用“只试两轮即收敛”。边界或重复参数会尝试其他合法候选。预算停止不等于收敛，布局改善不等于聚类改善；最终仍需 marker、稀有群、sample/QC、种子稳定性及注释/图片复核。每轮 `selection_summary.json` 明确最佳 run、理由和未决检查。完整规则见 skill 的 `references/optimization.md`。
+
+`execution_scope` 记录最早受影响步骤；当前通用执行器仍完整重放 Notebook，不能据此声称已自动复用 QC/PCA 缓存。新版仅用于新计划和新会话，不改变既有结果或活动运行快照。
 
 ### 6. Diagnosis and narrow correction / 诊断与窄修正
 
@@ -335,7 +339,7 @@ At the end of every round, record the evidence, the conclusion and the next step
 - A confirmed data product would have to be overwritten. 需要覆盖已确认的数据产品。
 - The input identity or the intended analysis objective is unclear. 输入身份或预期分析目标不明确。
 - Cluster/marker differences cannot be judged reliably from the expression evidence. cluster/marker 差异无法从表达证据得到可靠生物学判断。
-- Two consecutive parameter candidates brought no substantial improvement, or changed only the visual appearance. 连续两轮参数候选均未带来实质改善，或只改变视觉外观。
+- The declared search budget/patience is exhausted, or no unvisited executable local candidate remains. 达到预先声明的搜索预算/patience，或没有未测试且可执行的局部候选；记录停止原因和保留的最佳结果，不宣称全局最优。
 - Continuing would significantly increase resource consumption or have irreversible effects. 继续运行会显著增加资源消耗或产生不可逆影响。
 
 ## Definition of done / 正式完成标准

@@ -154,20 +154,15 @@ def rule_fallback(state: Mapping[str, Any]) -> Dict[str, Any]:
     silhouette = clustering.get("silhouette")
     celltype = biology.get("celltype_asw") if biology.get("independent") else None
     ilisi = batch.get("ilisi")
-    acceptable = (trust is not None and trust >= 0.95 and knn is not None and knn >= 0.75
-                  and silhouette is not None and silhouette >= 0.15
-                  and (celltype is None or celltype >= 0.20)
-                  and (ilisi is None or ilisi >= 0.35))
-    if silhouette is not None and silhouette < 0.15:
-        parameter, direction = "resolution", "increase"
-    elif ilisi is not None and ilisi < 0.35:
-        parameter, direction = "n_neighbors", "increase"
-    elif trust is not None and trust < 0.95:
-        parameter, direction = "n_pcs", "increase"
+    # Low silhouette does not imply that more clusters are better. Global
+    # sample mixing can erase disease biology and is not an acceptance target.
+    acceptable = False
+    if clustering.get('small_cluster_cell_fraction', 0) > 0.05:
+        parameter, direction = 'resolution', 'decrease'
     elif knn is not None and knn < 0.75:
-        parameter, direction = "min_dist", "decrease"
+        parameter, direction = "n_neighbors", "increase"
     else:
-        parameter, direction = "none", "keep"
+        parameter, direction = 'resolution', 'decrease'
     available = [value for value in (trust, knn, (silhouette + 1) / 2 if silhouette is not None else None,
                                       (celltype + 1) / 2 if celltype is not None else None)
                  if value is not None]

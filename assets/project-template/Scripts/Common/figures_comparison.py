@@ -327,7 +327,7 @@ def build_specs(root, plan, spec, source):
                     continue
                 if row.get('status') != 'complete' or row.get('dmrs', 0) <= 0:
                     raise ValueError('invalid DMR sample status: ' + sample)
-                for key in ('mean_ratio_plot', 'zscore_plot', 'zscore_compressed_colorbar_plot'):
+                for key in ('mean_ratio_plot', 'zscore_plot', 'zscore_compressed_colorbar_plot', 'zscore_mean_plot'):
                     path = source.file(row[key])
                     dmr_files.append({'path': path, 'sample': sample, 'kind': key,
                                       'target': 'dmr/' + safe_name(sample) + '/' + key + path.suffix})
@@ -496,7 +496,8 @@ def run(root, run_id):
     item = next(x for x in plan['tasks'] if x['id'] == 'figures_comparison')
     spec = item['parameters']
     identity = {key: plan[key] for key in ('run_id', 'input_signature', 'code_signature')}
-    identity.update(task='figures_comparison', plan_sha256=sha(plan_path))
+    from figures_comparison_evidence import plan_digest
+    identity.update(task='figures_comparison', plan_sha256=plan_digest(plan_path))
     result = Path(plan['result_dir'])
     result.mkdir(parents=True, exist_ok=True)
     output = result / 'figures_comparison'

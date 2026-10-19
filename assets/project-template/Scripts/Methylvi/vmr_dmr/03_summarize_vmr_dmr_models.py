@@ -9,6 +9,18 @@ from pathlib import Path
 import anndata as ad
 
 
+def validate_embedding_shape(embedding, run_summary, expected_cells):
+    # Legacy trainer versions always used 20; new runs record the actual value.
+    dimensions = run_summary.get('n_latent', 20)
+    if isinstance(dimensions, bool) or not isinstance(dimensions, int) or dimensions < 1:
+        raise ValueError('invalid recorded latent dimensionality')
+    if (embedding.n_obs != expected_cells or embedding.n_vars != dimensions
+            or 'X_methylVI' not in embedding.obsm
+            or embedding.obsm['X_methylVI'].shape != (expected_cells, dimensions)):
+        raise ValueError('embedding shape disagrees with recorded model capacity')
+    return dimensions
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, required=True)
@@ -37,12 +49,15 @@ def main() -> None:
             if missing:
                 raise FileNotFoundError("Missing model artifacts: " + ", ".join(missing))
             embedding = ad.read_h5ad(route / "results/methylvi_embedding.h5ad", backed="r")
-            if embedding.n_obs != args.expected_cells or embedding.n_vars != 20:
-                raise ValueError(f"Unexpected embedding shape for {route}: {embedding.shape}")
+            try:
+                dimensions = validate_embedding_shape(embedding, run_summary, args.expected_cells)
+            finally:
+                embedding.file.close()
             if input_summary["combined_features"] != run_summary["features"]:
                 raise ValueError(f"Input/training feature mismatch for {route}")
             models.append({
                 "variance_threshold": float(threshold), "base_vmr_features": base_features,
+                "n_latent": dimensions,
                 **{key: input_summary[key] for key in (
                     "nonoverlapping_dmrs_added", "dmrs_overlapping_vmr_removed", "combined_features"
                 )},

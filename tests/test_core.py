@@ -181,7 +181,7 @@ class SkillTests(unittest.TestCase):
             # Figure delivery is exercised with real small embeddings separately.
             "analysis": {"figures_comparison": {"enabled": False}, "task_commands": {"scanpy": [
                 "/bin/sh", "-c",
-                "touch {task_dir}/artifact; printf '%s\\n' '{{\"artifacts\":[\"{task_dir}/artifact\"]}}' > {task_dir}/task_outputs.json",
+                "printf 'fixture-data' > {task_dir}/artifact; printf '%s\\n' '{{\"artifacts\":[\"{task_dir}/artifact\"]}}' > {task_dir}/task_outputs.json",
             ]}},
             "scheduler": {"backend": "local", "local": {"max_threads": 64, "max_memory": "256G"}},
         }
@@ -1131,7 +1131,8 @@ class SkillTests(unittest.TestCase):
             self.assertEqual(result["status"], "dry_run")
             self.assertEqual(result["backend_effective"], "slurm")
             self.assertEqual(result["backend_source"], "promoted-from-local")
-            records = json.loads((project / ".workflow/runs/unit/submissions.json").read_text())
+            self.assertFalse((project / ".workflow/runs/unit/submissions.json").exists())
+            records = json.loads((project / ".workflow/runs/unit/submission_preview.json").read_text())
             scanpy = [item for item in records if item["task"] == "scanpy"][0]
             self.assertEqual(scanpy["backend_declared"], "local")
             self.assertEqual(scanpy["backend_effective"], "slurm")
@@ -1315,8 +1316,9 @@ class SkillTests(unittest.TestCase):
         recommendation = choose(nodes, scheduler, profile)
         self.assertEqual(recommendation["reference_node"], "node-a")
         too_large = {"floor": {"cpus": 30, "memory": "100G"}, "target": {"cpus": 32, "memory": "120G"}, "ceiling": {"cpus": 64, "memory": "256G"}}
+        self.assertFalse(choose(nodes, scheduler, too_large)['immediately_available'])
         with self.assertRaises(WorkflowError):
-            choose(nodes, scheduler, too_large)
+            choose(nodes, dict(scheduler, queue_when_busy=False), too_large)
         self.assertEqual([item for item in nodes if item["name"] == "node-c"][0]["state"], "down")
 
     # --- root README/Report: filled once at generation, appended per run -------

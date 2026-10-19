@@ -1,5 +1,7 @@
 # Environment discovery and provisioning
 
+For user-supplied accelerated releases, read [acceleration backends](acceleration.md).
+
 Environment handling has two phases. First inspect declared paths and discover compatible Conda prefixes without changing them. Then create only the unresolved profiles as isolated environments.
 
 The generated project carries versioned specs for four profiles:

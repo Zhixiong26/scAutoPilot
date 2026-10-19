@@ -8,7 +8,7 @@ All selected routes, including prerequisites, appear in `Results/runs/<run-id>/f
 |---|---|
 | Scanpy | The run's declared h5ad; summary annotation_key (candidate versus reviewed), leiden, cohort, Harmony UMAP |
 | MethSCAn VMR | Each threshold's embedding, coordinate table and cell filtering QC; annotation if present, leiden, sample_id |
-| MethSCAn DMR | Checksum-verified copies of existing sample heatmaps; explicit no-DMR outcomes |
+| MethSCAn DMR | Checksum-verified copies of all four existing heatmaps: raw, Z-score, compressed Z-score, cell-type mean Z-score; explicit no-DMR outcomes |
 | ALLCools | Native UMAP, manual_celltype, L1 and sample_id from the maximum feature target's clustered h5ad |
 | MethylVI ALLCools | Ordinary and separately labelled supervised UMAPs across feature targets |
 | MethylVI VMR | Threshold comparisons for each feature target |

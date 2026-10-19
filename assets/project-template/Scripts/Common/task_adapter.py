@@ -89,6 +89,14 @@ def main() -> int:
     result = Path(plan["result_dir"])
     result.mkdir(parents=True, exist_ok=True)
     args.task_dir.mkdir(parents=True, exist_ok=True)
+    if args.task.startswith('methylation_iter_'):
+        environments = {row['stage']: row for row in load_environments(root)}
+        python = resolve_path(root, environments.get('scanpy_allcools', {}).get('python'))
+        if python is None:
+            raise WorkflowError('methylation iteration requires scanpy_allcools Python')
+        subprocess.check_call([str(python), str(root / 'tools/run_methylation_iteration.py'),
+                               '--project', str(root), '--run-id', args.run_id, '--task', args.task], cwd=str(root))
+        return 0
     # Presentation needs no methylation references or annotation normalization.
     # Dispatch before those stage-specific preconditions and writes.
     if args.task == "figures_comparison":
@@ -118,7 +126,7 @@ def main() -> int:
     if annotation_table and annotation_table.is_file() and (
             annotation.get("cell_id_column", "cell_id") != "cell_id"
             or annotation.get("cell_type_column", "cell_type") != "cell_type"):
-        normalized = result / "annotation.normalized.tsv"
+        normalized = args.task_dir / "annotation.normalized.tsv"
         normalize_annotation_table(annotation_table, normalized,
             annotation.get("cell_id_column", "cell_id"),
             annotation.get("cell_type_column", "cell_type"))
@@ -190,6 +198,9 @@ def main() -> int:
         "SCMO_EPOCHS": str(mvi.get("epochs", 500)),
         "SCMO_BATCH_SIZE": str(mvi.get("batch_size", 32)), "SCMO_SEED": str(mvi.get("seed", 0)),
         "SCMO_VALIDATION_FRACTION": str(mvi.get("validation_fraction", 0.1)),
+        "SCMO_MVI_N_LATENT": str(mvi.get('n_latent', 20)),
+        "SCMO_MVI_N_HIDDEN": str(mvi.get('n_hidden', 128)),
+        "SCMO_MVI_N_LAYERS": str(mvi.get('n_layers', 1)),
         # Training tasks call the shared scripts directly rather than sourcing
         # a route shell config, so every required training/plotting variable
         # must be present in this common task environment.
@@ -270,7 +281,8 @@ def main() -> int:
         summary_path = meth_root / "hypo_dmr_heatmap_summary.json"
         summary = json.loads(summary_path.read_text())
         plots = [Path(row[key]) for row in summary["plots"]["samples"] if row.get("status") == "complete"
-                 for key in ("mean_ratio_plot", "zscore_plot", "zscore_compressed_colorbar_plot")]
+                 for key in ("mean_ratio_plot", "zscore_plot", "zscore_compressed_colorbar_plot",
+                             "zscore_mean_plot", "zscore_mean_matrices", "zscore_mean_table", "zscore_mean_support")]
         record([meth_root / "hypo_heatmaps.COMPLETE", summary_path] + plots)
     elif task == "methscan_pooled_dmr":
         run(["bash", scripts / "Methscan/run_methscan_pooled_methdiff.sbatch", meth_root])
@@ -393,6 +405,10 @@ def model_artifacts(route):
         results / "methylvi_latent.npy",
         results / "methylvi_embedding.h5ad",
         results / "model",
+        results / "train_cell_ids.tsv",
+        results / "validation_cell_ids.tsv",
+        results / "test_cell_ids.tsv",
+        results / "training_history",
         results / "methylvi_vmr_umap_cell_type.png",
         results / "methylvi_vmr_umap_sample_id.png",
         results / "methylvi_vmr_umap_condition.png",

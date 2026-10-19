@@ -32,6 +32,7 @@ BUILTIN_TASKS = {
     "pooled_dmr_counts", "workflow_summary", "figures_comparison",
 }
 BUILTIN_TASK_PREFIXES = (
+    "methylation_iter_",
     "methscan_vmr_", "methylvi_allcools_", "methylvi_vmr_features_",
     "methylvi_vmr_dmr_", "methylvi_vmr_",
 )
@@ -293,6 +294,139 @@ def task_is_implemented(task_id: str, commands: Dict[str, Any]) -> bool:
             or any(task_id.startswith(prefix) for prefix in BUILTIN_TASK_PREFIXES))
 
 
+def execution_code_hashes(root):
+    """Executable identity; notebooks exclude execution outputs, not source."""
+    root = Path(root)
+    hashes = {}
+    for folder in (root / "Scripts", root / "tools"):
+        if not folder.exists():
+            continue
+        for path in sorted(folder.rglob("*")):
+            if not path.is_file():
+                continue
+            if path.suffix in {".py", ".sh", ".sbatch", ".R", ".r"}:
+                hashes[str(path.relative_to(root))] = sha256_file(path)
+            elif path.suffix == ".ipynb":
+                hashes[str(path.relative_to(root))] = notebook_cells_digest(path)
+    for path in sorted((root / "environment-specs").glob("*.yaml")):
+        hashes[str(path.relative_to(root))] = sha256_file(path)
+    if (root / "workflow.py").is_file():
+        hashes["workflow.py"] = sha256_file(root / "workflow.py")
+    return hashes
+
+
+def runtime_identity(root):
+    """Small executable/config manifest only: never reread ALLC at task start."""
+    cfg = load_project(Path(root))
+    root = Path(root)
+    configs = {str(p.relative_to(root)): sha256_file(p) for p in sorted((root / 'config').rglob('*'))
+               if p.is_file() and p.suffix.lower() in {'.yaml', '.yml', '.json', '.tsv', '.csv'}}
+    return {"code": execution_code_hashes(root), "config_files": configs,
+            "configuration": signature({k: v for k, v in cfg.items()
+                                        if k not in {"project_root", "config_files"}})}
+
+
+def signed_plan_digest(plan):
+    """Stable scientific identity; scheduler bookkeeping lives outside it."""
+    mutable = {"status", "job_ids", "host_role", "backend_declared", "backend_effective",
+               "backend_source", "login_execution_ack", "full_validation_skipped"}
+    return signature({k: v for k, v in plan.items() if k not in mutable})
+
+
+def artifact_identity(path):
+    path = Path(path)
+    stat = path.stat()
+    record = {"path": str(path), "kind": "directory" if path.is_dir() else "file",
+              "bytes": stat.st_size, "mtime_ns": stat.st_mtime_ns}
+    # Large matrices are checked by size/mtime here; format-specific validation
+    # remains the producing adapter's responsibility. Never call this a full hash.
+    if path.is_file() and stat.st_size <= 16 * 1024 * 1024:
+        record["sha256"] = sha256_file(path)
+    return record
+
+
+def seal_recorded_outputs(values):
+    """Attach content evidence at successful production, not during inspection."""
+    for value in values:
+        path = Path(value)
+        if path.name != "task_outputs.json":
+            continue
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        allowed_empty = set(payload.get('allow_empty_artifacts', []))
+        for artifact in payload['artifacts']:
+            item = Path(artifact)
+            if item.is_file() and item.stat().st_size == 0 and not item.name.endswith('.COMPLETE') and str(item) not in allowed_empty:
+                raise WorkflowError('empty scientific artifact requires an explicit no-result contract: %s' % item)
+        payload["artifact_evidence_version"] = 1
+        payload["artifact_evidence"] = [artifact_identity(p) for p in payload["artifacts"]]
+        write_json(path, payload)
+
+
+def update_results_index(results_root, run_id, task_id, artifacts, status='complete', finished_at=None):
+    """Publish locally and to explicitly configured central indexes, never recursively."""
+    root = Path(results_root).resolve()
+    targets = [root]
+    config = root / 'index_targets.json'
+    config_error = None
+    if config.exists():
+        try:
+            values = json.loads(config.read_text(encoding='utf-8'))['additional_results_roots']
+            if not isinstance(values, list) or any(not isinstance(p, str) or not Path(p).is_absolute() for p in values):
+                raise WorkflowError('index targets must be an explicit list of absolute Results directories')
+            targets += [Path(p).resolve() for p in values]
+        except (KeyError, ValueError, OSError, WorkflowError) as exc:
+            config_error = str(exc)
+    errors = [config_error] if config_error else []
+    for target in dict.fromkeys(targets):
+        try:
+            _write_results_index(target, run_id, task_id, artifacts, status, finished_at, root)
+        except (OSError, ValueError, WorkflowError) as exc:
+            errors.append('%s: %s' % (target, exc))
+    if errors:
+        raise WorkflowError('; '.join(errors))
+
+
+def _write_results_index(results_root, run_id, task_id, artifacts, status, finished_at, source_root):
+    """Idempotent managed block; preserve hand-written text, lock and replace atomically."""
+    import fcntl
+    import tempfile
+    root = Path(results_root)
+    root.mkdir(parents=True, exist_ok=True)
+    index = root / 'RESULTS_INDEX.md'
+    key = signature({'project_results': str(source_root), 'run': run_id, 'task': task_id})[:24]
+    start, end = '<!-- result:%s:start -->' % key, '<!-- result:%s:end -->' % key
+    paths = sorted({str(Path(p).resolve()) for p in artifacts if Path(p).exists()})
+    verdict = '已生成并通过任务产物检查；视觉/生物学审核另行记录。' if status == 'complete' else '任务未通过；下列为诊断证据，不代表结果交付。'
+    text = start + '\n### `%s / %s`\n\n%s\n\n来源：`%s`；状态：`%s`。\n' % (run_id, task_id, verdict, source_root, status)
+    if finished_at:
+        text += '任务结束时间：`%s`。\n' % finished_at
+    # Keep large count/checkpoint sets in their task_outputs inventory.
+    selected = paths if len(paths) <= 100 else [p for p in paths if Path(p).suffix.lower() in {'.json', '.md', '.png', '.pdf'}][:100]
+    text += '\n' + '\n'.join('- [%s](<%s>)' % (Path(p).name, p) for p in selected)
+    if len(paths) > len(selected):
+        text += '\n\n共 %d 项存在的产物；完整列表见任务 task_outputs.json。' % len(paths)
+    text += '\n' + end
+    with (root / '.results_index.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        original = index.read_text(encoding='utf-8') if index.exists() else '# Results index\n'
+        if start in original:
+            left = original.index(start)
+            if end not in original[left:]:
+                raise WorkflowError('incomplete managed results-index block; preserve original')
+            right = original.index(end, left) + len(end)
+            updated = original[:left] + text + original[right:]
+        else:
+            updated = original.rstrip() + '\n\n' + text + '\n'
+        fd, temporary = tempfile.mkstemp(prefix='.results_index.', suffix='.tmp', dir=root)
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as handle:
+                handle.write(updated)
+                handle.flush(); os.fsync(handle.fileno())
+            os.replace(temporary, index)
+        finally:
+            if os.path.exists(temporary): os.unlink(temporary)
+
+
 def validate_recorded_outputs(values: Iterable[Any], allow_empty: bool = False) -> tuple[bool, str | None]:
     outputs = [Path(str(value)) for value in values]
     if not outputs and not allow_empty:
@@ -314,6 +448,17 @@ def validate_recorded_outputs(values: Iterable[Any], allow_empty: bool = False) 
             missing = [str(artifact) for artifact in artifacts if not Path(str(artifact)).exists()]
             if missing:
                 return False, "recorded artifacts are absent: %s" % ", ".join(missing)
+            if "artifact_evidence_version" in payload:
+                evidence = payload.get("artifact_evidence", [])
+                if (payload["artifact_evidence_version"] != 1 or not isinstance(evidence, list)
+                        or len(evidence) != len(artifacts)
+                        or {e.get("path") for e in evidence} != set(artifacts)):
+                    return False, "invalid artifact identity manifest: %s" % path
+                for expected in evidence:
+                    actual = artifact_identity(expected["path"])
+                    keys = ("kind",) if expected.get("kind") == "directory" else ("kind", "bytes", "mtime_ns", "sha256")
+                    if any(actual.get(k) != expected.get(k) for k in keys):
+                        return False, "artifact changed after completion: %s" % expected["path"]
             if "delivery_evidence" in payload:
                 from figures_comparison_evidence import validate_delivery_record
                 try:

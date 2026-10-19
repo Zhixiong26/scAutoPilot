@@ -402,7 +402,24 @@ def zscore(matrix, min_observed):
     return out, counts, eligible
 
 
-def plot_one(matrix, row_types, col_types, output, title, vmin, vmax, raw, dpi):
+def celltype_zscore_means(z, row_types, min_observed=3):
+    """Mean saved single-cell Z-scores, never re-standardize group means."""
+    if z.ndim != 2 or z.shape[0] != len(row_types) or min_observed < 1:
+        raise ValueError("Invalid Z-score matrix, labels or support threshold")
+    labels = sorted(set(row_types))
+    means = np.full((len(labels), z.shape[1]), np.nan, dtype=np.float64)
+    counts = np.zeros(means.shape, dtype=np.int64)
+    row_types = np.asarray(row_types)
+    for i, label in enumerate(labels):
+        values = z[row_types == label].astype(np.float64)
+        finite = np.isfinite(values)
+        counts[i] = finite.sum(axis=0)
+        np.divide(np.where(finite, values, 0).sum(axis=0), counts[i],
+                  out=means[i], where=counts[i] >= min_observed)
+    return labels, means, counts
+
+
+def plot_one(matrix, row_types, col_types, output, title, vmin, vmax, raw, dpi, group_mean=False):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -458,12 +475,14 @@ def plot_one(matrix, row_types, col_types, output, title, vmin, vmax, raw, dpi):
         f"({matrix.shape[1]:,} exact DMR columns)", labelpad=8
     )
     ax.set_ylabel(
-        f"Single cells grouped by annotated cell type ({matrix.shape[0]:,} cells)",
+        (f"Cell-type means ({matrix.shape[0]:,} types)" if group_mean else
+         f"Single cells grouped by annotated cell type ({matrix.shape[0]:,} cells)"),
         labelpad=8,
     )
     ax.text(1.0, 1.005, "Gray = NA", transform=ax.transAxes,
             ha="right", va="bottom", fontsize=7, color="#666666")
-    fig.colorbar(image, cax=cax, label="Mean unique-CpG methylation ratio" if raw else "DMR-wise Z-score")
+    fig.colorbar(image, cax=cax, label=("Mean single-cell DMR-wise Z-score" if group_mean else
+                 "Mean unique-CpG methylation ratio" if raw else "DMR-wise Z-score"))
     fig.savefig(output, dpi=dpi); plt.close(fig)
 
 
@@ -513,6 +532,24 @@ def stage_plots(args, matrix_summary):
         plot_one(z, row_types, ordered_col_types, compressed_png,
                  f"{sample}: DMR-wise z-score (compressed colorbar)", -args.compressed_colorbar_limit,
                  args.compressed_colorbar_limit, False, args.dpi)
+        mean_labels, mean_z, mean_counts = celltype_zscore_means(z, row_types)
+        mean_png = sample_dir / "zscore_mean.png"
+        mean_data = sample_dir / "zscore_mean_matrices.npz"
+        np.savez_compressed(mean_data, zscore_mean=mean_z, observed_cells=mean_counts,
+                            cell_types=np.asarray(mean_labels),
+                            dmr_ids=np.asarray([matrix_rows[j][3] for j in col_order]))
+        mean_table = sample_dir / "zscore_mean.tsv"
+        mean_support = sample_dir / "zscore_mean_observed_cells.tsv"
+        for path, values in ((mean_table, mean_z), (mean_support, mean_counts)):
+            with path.open("w", newline="") as handle:
+                writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
+                writer.writerow(["cell_type"] + [matrix_rows[j][3] for j in col_order])
+                for label, vector in zip(mean_labels, values):
+                    writer.writerow([label] + [v if np.isfinite(v) else "NA" for v in vector])
+        plot_one(mean_z, mean_labels, ordered_col_types, mean_png,
+                 f"{sample}: cell-type mean of single-cell Z-scores (n>=3)",
+                 -args.compressed_colorbar_limit, args.compressed_colorbar_limit,
+                 False, args.dpi, group_mean=True)
         with (sample_dir / "zscore_qc.tsv").open("w", newline="") as handle:
             writer = csv.writer(handle, delimiter="\t", lineterminator="\n"); writer.writerow(["dmr_id", "observed_cells", "eligible"])
             for j, source_j in enumerate(col_order): writer.writerow([matrix_rows[source_j][3], int(counts[j]), "yes" if eligible[j] else "no"])
@@ -521,13 +558,18 @@ def stage_plots(args, matrix_summary):
                           "cell_types_with_own_hypo_dmrs": len(own_dmr_types),
                           "zscore_eligible_dmrs": int(eligible.sum()),
                           "mean_ratio_plot": str(raw_png), "zscore_plot": str(z_png),
-                          "zscore_compressed_colorbar_plot": str(compressed_png)})
+                          "zscore_compressed_colorbar_plot": str(compressed_png),
+                          "zscore_mean_plot": str(mean_png), "zscore_mean_matrices": str(mean_data),
+                          "zscore_mean_table": str(mean_table), "zscore_mean_support": str(mean_support)})
     summary = {"status": "complete", "zscore_axis": "each DMR across observed single cells",
                "cell_row_rule": "retain only cell types assigned at least one own hypo-DMR",
                "zscore_min_observed_cells": args.zscore_min_observed_cells,
                "ordinary_zscore_display_clip": [-args.zscore_clip, args.zscore_clip],
                "compressed_colorbar_limits": [-args.compressed_colorbar_limit, args.compressed_colorbar_limit],
-               "compressed_plot_modifies_zscore_values": False, "samples": summaries}
+               "compressed_plot_modifies_zscore_values": False,
+               "zscore_mean_min_observed_cells": 3,
+               "zscore_mean_definition": "cell-weighted mean of saved single-cell Z-scores within cell type; no re-zscoring; insufficient coverage stays NA",
+               "samples": summaries}
     (root / "plot_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     return summary
 

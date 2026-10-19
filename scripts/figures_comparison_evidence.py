@@ -18,6 +18,12 @@ def sha(path):
     return digest.hexdigest()
 
 
+def plan_digest(path):
+    from _common import signed_plan_digest
+    plan = read_json(path)
+    return signed_plan_digest(plan) if plan.get('plan_identity_version') == 2 else sha(path)
+
+
 def read_json(path):
     value = json.loads(Path(path).read_text(encoding='utf-8'))
     if not isinstance(value, dict):
@@ -91,7 +97,7 @@ def validate_delivery_record(record, record_path=None):
         plan_path = Path(record_path).parents[2] / 'plan.json'
         plan = read_json(plan_path)
         expected_identity = {key: plan[key] for key in ('run_id', 'input_signature', 'code_signature')}
-        expected_identity.update(task='figures_comparison', plan_sha256=sha(plan_path))
+        expected_identity.update(task='figures_comparison', plan_sha256=plan_digest(plan_path))
         if evidence.get('identity') != expected_identity:
             raise ValueError('delivery evidence belongs to another signed plan')
         if manifest != Path(plan['result_dir']) / 'figures_comparison/delivery_manifest.json':

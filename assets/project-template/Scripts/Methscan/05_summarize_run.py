@@ -41,7 +41,8 @@ def main():
         raise ValueError("Hypo-DMR heatmap summary is not complete")
     for sample in hypo_heatmaps.get("plots", {}).get("samples", []):
         if sample.get("status") == "complete":
-            for key in ("mean_ratio_plot", "zscore_plot", "zscore_compressed_colorbar_plot"):
+            for key in ("mean_ratio_plot", "zscore_plot", "zscore_compressed_colorbar_plot",
+                        "zscore_mean_plot", "zscore_mean_matrices", "zscore_mean_table", "zscore_mean_support"):
                 required(Path(sample[key]))
     selected=tsv(common["selection"]); selected_ids=[r["cell_id"] for r in selected]; unique("selection", selected_ids)
     if any(not (r.get("rna_cell_type") or "").strip() or (r.get("rna_cell_type") or "").strip()=="NA" for r in selected): raise ValueError("Selected manifest contains empty/NA cell types")

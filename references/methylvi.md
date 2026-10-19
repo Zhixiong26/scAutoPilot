@@ -6,6 +6,13 @@ Require unique cells/features, integral nonnegative counts, `mc <= cov`, explici
 
 VMRs and ALLC manifests must share a completed MethSCAn signature. VMR+DMR retains selected VMRs and appends only merged pooled DMRs with zero genomic overlap.
 
+New ALLCools count checkpoints bind the ALLC table hash and selected source-file
+metadata (resolved path, size, mtime/ctime), as well as cells, coordinates, metadata,
+bin size and context. The output H5MU embeds that manifest's digest. Legacy or
+source-mismatched caches are refused; use a new work/output directory, never stamp
+new provenance onto unverified old counts. Source metadata checks do not reread
+entire ALLC files and are not a raw-data content-checksum claim.
+
 Export latent embedding, ordinary UMAP/Leiden, supervised sensitivity views, methylation QC, summaries, and completion markers under the run-specific result root. Ordinary UMAP remains the primary latent-structure view.
 
 ALLCools reuses the common MethSCAn selection/prepare/filter chain because its expected-cell authority and COV inputs come from the filtered manifest. It does not require smooth or VMR scan unless a VMR route is also selected.
@@ -26,4 +33,9 @@ model. Resolution-only candidates preserve the latent representation and graph;
 neighbors-only candidates preserve the latent representation. Label purity can
 increase merely through splitting; RNA references and supervised UMAP separation
 are not independent validation. Extra model searches require their own planned
-tasks; the packaged automatic review controller covers Scanpy only.
+tasks. The executable `methylation_iteration` route screens retained latents without
+retraining; see [the complete inner/outer loop](methylation-optimization.md).
+For optional official Optuna capacity proposals and external method readiness,
+read [literature-backed methods](published-methods.md). Optuna proposes; signed
+DAG tasks train; comparable validation losses screen; stability/biological review
+selects. scvi autotune/ASHA and donor-held-out training are not implicitly enabled.

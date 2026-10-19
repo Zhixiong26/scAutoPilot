@@ -33,11 +33,11 @@ def sacct_usage(job_ids: list[str]) -> dict[str, dict]:
         ], stderr=subprocess.STDOUT).decode("utf-8", "replace")
     except (OSError, subprocess.SubprocessError):
         return {}
-    result = {}
+    result, steps = {}, {}
     for line in output.splitlines():
         fields = line.split("|")
-        if len(fields) >= 2 and "." not in fields[0]:
-            result[fields[0]] = {
+        if len(fields) >= 2:
+            record = {
                 "state": normalize_job_state(fields[1]),
                 "elapsed": fields[2] if len(fields) > 2 else "",
                 "allocated_cpus": fields[3] if len(fields) > 3 else "",
@@ -46,6 +46,22 @@ def sacct_usage(job_ids: list[str]) -> dict[str, dict]:
                 "total_cpu": fields[6] if len(fields) > 6 else "",
                 "exit_code": fields[7] if len(fields) > 7 else "",
             }
+            if "." in fields[0]:
+                steps.setdefault(fields[0].split('.', 1)[0], []).append(dict(record, step=fields[0]))
+            else:
+                result[fields[0]] = record
+    def rss_bytes(value):
+        import re
+        match = re.fullmatch(r'([0-9.]+)([KMGTPE]?)', value.strip(), re.I)
+        return float(match[1]) * (1024 ** (' KMGTPE'.index(match[2].upper()) if match[2] else 0)) if match else 0
+    for job, record in result.items():
+        record['steps'] = steps.get(job, [])
+        candidates = [(record.get('max_rss', ''), job)] + [(s['max_rss'], s['step']) for s in record['steps']]
+        peak, source = max(candidates, key=lambda pair: rss_bytes(pair[0]))
+        record['max_rss'] = peak
+        record['max_rss_source'] = source if peak else None
+        record['memory_semantics'] = 'maximum recorded task RSS across steps; not simultaneous whole-job memory'
+        record['accounting_provisional'] = record['state'] not in TERMINAL_OK | TERMINAL_BAD
     return result
 
 

@@ -473,7 +473,7 @@ class RealRegistryTests(unittest.TestCase):
         for parameter_id in (
             "scanpy.neighbors.metric",
             "methylvi.train.learning_rate",
-            "methylvi.model.n_latent",
+            "methylvi.train.early_stopping",
         ):
             self.assertFalse(self.registry.is_registered(parameter_id))
             self.assertTrue(self.registry.frozen_reason(parameter_id))
@@ -487,6 +487,13 @@ class RealRegistryTests(unittest.TestCase):
         with self.assertRaises(RegistryError) as caught:
             self.registry.assert_mutable(["scanpy.qc.min_genes"])
         self.assertIn("closed", str(caught.exception))
+
+    def test_model_capacity_is_configurable_but_not_in_automatic_rna_search(self):
+        for key in ('n_latent', 'n_hidden', 'n_layers'):
+            name = 'methylvi.model.' + key
+            self.assertTrue(self.registry.is_registered(name))
+            self.assertFalse(self.registry.parameters[name].searchable)
+            with self.assertRaises(RegistryError): self.registry.assert_mutable([name])
 
     def test_only_the_scanpy_mvp_axes_are_open_after_behavior_coverage(self):
         self.assertEqual(

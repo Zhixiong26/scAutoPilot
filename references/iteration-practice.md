@@ -5,6 +5,11 @@ UMAP, revise annotations, or compare methylation models. It incorporates the
 IPF_final analysis experience; its sample names, cluster numbers, thresholds,
 selected runs and approval decisions are not defaults for another project.
 
+When the task calls for established methods or stronger validation, route to
+[literature-backed methods](published-methods.md). Select the relevant protocol
+and disclose deployment/adaptation status; do not run every listed method or
+claim a published name for the existing local heuristics.
+
 ## Decide what actually changes
 
 | Request / diagnosis | Work to perform | Evidence to preserve |
@@ -47,6 +52,9 @@ call. Do not force a subtype or remove a cluster to make islands look cleaner.
    **review required**, or **stop without improvement**, with concrete evidence.
    A rejected candidate stays available. A completed job, a model's accept score,
    or an attractive UMAP alone is not convergence or biological approval.
+   A material gain cannot cancel an unacceptable loss in another metric. Check
+   both incumbent-relative and initial-baseline-relative losses; keep layout-only
+   improvements distinct. Numeric tolerances are screening rules, not p-values.
 7. If continued iteration was requested, carry on within that scope until the
    configured stopping condition, evidence-supported selection, or a specific
    unresolved scientific choice. Do not repeatedly ask to continue an already
@@ -57,6 +65,14 @@ For each round save a compact comparison table containing parent/candidate IDs,
 changed parameters, retained cells/features, annotation revision, fixed-k
 metrics, batch/QC diagnostics, backend state and final decision. Reference the
 actual tables/figures from the stage Report rather than copying implementation.
+
+The 0.12 controller implements an incumbent-centred, non-repeating local search
+and writes `selection_summary.json` every round. LLM accept/no-change suggestions
+do not terminate available search; escalation does. At completion, name the
+incumbent artifact, stopping reason, rejected alternatives and unresolved checks.
+Only the selected finalists need more expensive independent seed repetitions;
+predeclare seeds and report unstable rare groups, not just mean/global scores.
+Do not automatically promote the last candidate or call a budget stop convergence.
 
 ## Annotation revisions and downstream handoff
 
@@ -119,10 +135,11 @@ approval state for this derived input, then validate the selected DMR routes.
 
 ## MethylVI unsupervised iteration
 
-This is a scientific workflow for constructing a separate planned experiment;
-the shipped automatic controller implements **Scanpy's four axes only**. The
-IPF_final custom controllers are not a portable CLI and must not be copied with
-their monkey-patched validators, run IDs, paths, cell counts or hardcoded grids.
+For executable retained-latent screening and the complete feature/model outer
+loop read [methylation iteration](methylation-optimization.md). Its separate DAG
+route does not invoke the Scanpy controller. The IPF_final custom controllers
+must not be copied with monkey-patched validators, run IDs, paths, cell counts
+or hardcoded grids.
 
 Start from verified trained-model/embedding artifacts. Audit latent-depth
 correlations, observed-feature coverage, sample enrichment conditional on label,
@@ -142,6 +159,21 @@ Predeclare screening criteria and search budget for the study. If no candidate
 clearly improves the evidence, retain the incumbent and identify the limiting
 factor. A changed feature set, latent dimension, training configuration or cell
 selection requires its own signed model experiment and input validation.
+
+Use a staged budget: diagnose first; screen graph/resolution settings on verified
+retained latents; investigate feature/model changes only if those diagnostics
+identify a latent-level defect; confirm a short list across seeds before final
+selection. Separate training validation loss/convergence, unsupervised structure,
+donor/coverage confounding and supervised-display sensitivity. A lower validation
+loss alone is not proof of better cell identity. Compare on fixed overlapping
+cells/features or explicitly report why models are not directly comparable.
+Reuse count matrices/models only when the relevant inputs, parameters and code
+match; a figure-only change never calls for retraining. Independent candidates
+may run concurrently within measured node CPU/RAM capacity, without inventing
+dependencies. Do not cancel, requeue or modify running model snapshots to apply
+a maintenance upgrade. Feature discovery/retraining remains an agent-managed
+outer experiment; `methylation_iteration` implements the retained-representation
+inner loop, not unattended model retraining.
 
 Reused outputs need source task completion, input/code signatures, cell/feature
 identity, parameter compatibility and artifact hashes. Reusing old ALLC evidence

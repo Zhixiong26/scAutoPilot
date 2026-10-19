@@ -18,7 +18,8 @@
 # 避免逐图登记带来的维护面；合并边界与审计给出的上游集合一致。
 #
 # 审计基准：模板 0.8.0，2026-09-25。三条路线分别审计，证据为文件:行号。
-# 当前所有条目保持 searchable:false；M2 行为测试逐轴通过后再单独开放。
+# Scanpy 四轴已开放；独立 methylation_iteration 操作保留表示的副本，
+# 不修改本表的 canonical 分析参数。模型容量可配置，但不自动进入模型搜索。
 
 schema_version: 1
 
@@ -572,7 +573,7 @@ parameters:
     default: 32
     verified_against: template
     searchable: false
-    note: 环境变量硬读取；run_summary.json 不记录它。
+    note: 环境变量读取；0.13 起在 run_summary.json 记录，仍不开放为 Scanpy MVP 轴。
   methylvi.train.epochs:
     stage: methylvi_train
     affects: [methylvi.model_dir, methylvi.run_summary]
@@ -581,8 +582,8 @@ parameters:
     verified_against: template
     searchable: false
     note: >-
-      唯一被记录进 run_summary 的训练参数，且记录的是请求值而非实际或最佳 epoch。
-      这是 §9.2 epoch 保真度阶梯的挂载点。
+      run_summary 记录请求 epochs；0.13 另存 training_history 和实际拆分细胞。
+      不能把请求 epochs 当作实际停止 epoch 或最佳 checkpoint。
   methylvi.train.validation_fraction:
     stage: methylvi_train
     affects: [methylvi.model_dir]
@@ -591,6 +592,31 @@ parameters:
     verified_against: template
     searchable: false
     note: 影响训练/验证拆分与 early stopping；首版作为比较协议字段冻结，但必须进入缓存键。
+
+  methylvi.model.n_latent:
+    stage: methylvi_train
+    affects: [methylvi.model_dir, methylvi.run_summary]
+    read: ["Scripts/Methylvi/shared/04_train_methylvi.py:31"]
+    default: 20
+    verified_against: template
+    searchable: false
+    note: analysis.methylvi.n_latent 经 adapter/CLI 传入；容量改变需要独立模型实验。
+  methylvi.model.n_hidden:
+    stage: methylvi_train
+    affects: [methylvi.model_dir, methylvi.run_summary]
+    read: ["Scripts/Methylvi/shared/04_train_methylvi.py:32"]
+    default: 128
+    verified_against: template
+    searchable: false
+    note: analysis.methylvi.n_hidden；不是 retained-latent 内循环参数。
+  methylvi.model.n_layers:
+    stage: methylvi_train
+    affects: [methylvi.model_dir, methylvi.run_summary]
+    read: ["Scripts/Methylvi/shared/04_train_methylvi.py:33"]
+    default: 1
+    verified_against: template
+    searchable: false
+    note: analysis.methylvi.n_layers；必须重训，不能截断或重命名 latent。
 
 # --- 计划声明可搜索、代码中不存在 ------------------------------------------
 frozen:
@@ -617,14 +643,6 @@ frozen:
     项目配置无法改它；可搜索性在托管路径上断裂。
   methscan.scanpy.min_cell_regions:
     同 min_region_cell_fraction：参数存在但未注入。
-  methylvi.model.n_latent: >-
-    计划 §6.3 声明可搜索。04_train_methylvi.py:60 硬编码 20，无 CLI、无环境变量。
-    另有硬阻塞：vmr_dmr/03_summarize_vmr_dmr_models.py:40 断言 embedding.n_vars == 20，
-    开放该参数必须一并改造。
-  methylvi.model.n_hidden:
-    计划 §6.3 声明可搜索。04_train_methylvi.py:60 硬编码 128。
-  methylvi.model.n_layers:
-    计划 §6.3 声明可搜索。04_train_methylvi.py:60 硬编码 1。
   methylvi.train.learning_rate: >-
     计划 §6.3 声明可搜索，缺口最大：04_train_methylvi.py 全文无 lr / optimizer 符号，
     model.train 未传该参数，无读取点、无默认值记录、无产物。实际值来自 scvi-tools 内部默认，

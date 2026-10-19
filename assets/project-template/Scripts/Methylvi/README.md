@@ -1,5 +1,19 @@
 # MethylVI workflows / MethylVI 流程
 
+## Iterative improvement / 自迭代
+
+The explicit `methylation_iteration` DAG route screens completed embeddings using
+all saved latent dimensions. Resolution-only changes retain the graph/UMAP;
+neighbors changes retain the latent; layout changes retain the partition. Confirm
+the baseline and selected result across graph seeds, then review biological and
+coverage/sample evidence. Graph seed checks are not model-training seed checks.
+
+先诊断，再复用 latent 搜索图参数；有特征/模型缺陷证据才单独重训。
+`analysis.methylvi.n_latent/n_hidden/n_layers` 控制模型容量，默认 20/128/1；
+训练导出历史和实际 train/validation/test 细胞名单。特征和模型参数改变需要
+独立计划，不能复用不兼容模型。监督权重 UMAP 分开交付，不用于无监督选优。
+新任务不会自动改变已批准的 cell type 或 DMR 分组。
+
 This directory contains three coordinated MethylVI feature routes over the same
 `$SCMO_EXPECTED_CELLS` MethSCAn-filtered cells (reference project example:
 6,264). The completed baseline experiment builds four feature inputs and eight

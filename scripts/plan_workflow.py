@@ -10,14 +10,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from _common import WorkflowError, git_commit, load_project, task_is_implemented, write_json
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from _common import WorkflowError, git_commit, load_project, task_is_implemented, write_json, runtime_identity
 from validate_project import validate
 
 
 def task(name: str, profile: str, dependencies: List[str] | None = None,
          parameters: Dict[str, Any] | None = None, environment: str = "orchestrator",
          outputs: List[str] | None = None, required_environments: List[str] | None = None) -> dict:
-    if outputs is None and name != "workflow_summary":
+    if outputs is None:
         outputs = ["{task_dir}/task_outputs.json"]
     return {
         "id": name, "profile": profile, "dependencies": dependencies or [],
@@ -90,6 +92,15 @@ def make_tasks(routes: Dict[str, bool], analysis: Dict[str, Any]) -> List[dict]:
         if not isinstance(feature_targets, list) or not feature_targets:
             raise WorkflowError("analysis.methylvi.feature_targets must be a non-empty list")
     tasks: List[dict] = []
+    if routes.get('methylation_iteration'):
+        from scautopilot.review.methylation import validate_spec
+        specs = analysis.get('methylation_iteration', [])
+        if not isinstance(specs, list) or not specs:
+            raise WorkflowError('analysis.methylation_iteration requires explicit source experiments')
+        for spec in specs:
+            spec = validate_spec(spec)
+            tasks.append(task('methylation_iter_' + spec['id'], 'plot',
+                parameters={'spec': spec}, environment='scanpy_allcools'))
     if routes.get("scanpy"):
         tasks.append(task("scanpy", "scanpy", environment="scanpy_allcools"))
     needs_filter = bool(routes.get("methscan_vmr") or routes.get("allcools"))
@@ -136,18 +147,16 @@ def make_tasks(routes: Dict[str, bool], analysis: Dict[str, Any]) -> List[dict]:
         tasks.append(task("pooled_dmr_prepare", "dmr_prepare", ["methscan_pooled_dmr"], environment="methylvi"))
         first_threshold = thresholds[0]
         tasks.append(task("pooled_dmr_counts", "feature_builder", ["pooled_dmr_prepare", "methylvi_vmr_features_%s" % first_threshold], environment="methylvi"))
-        previous = "pooled_dmr_counts"
         for threshold in thresholds:
             for count in feature_targets:
                 name = "methylvi_vmr_dmr_%s_%s" % (threshold, count)
                 base_features = "methylvi_vmr_features_%s" % threshold
-                tasks.append(task(name, "trainer", [previous, base_features], {"threshold": threshold, "features": count}, "methylvi"))
-                previous = name
+                tasks.append(task(name, "trainer", ["pooled_dmr_counts", base_features], {"threshold": threshold, "features": count}, "methylvi"))
     if tasks:
         terminal = {item["id"] for item in tasks}
         for item in tasks:
             terminal.difference_update(item["dependencies"])
-        if delivery.get("enabled", True):
+        if delivery.get("enabled", True) and any(v for k, v in routes.items() if k != 'methylation_iteration'):
             weights = analysis.get("methylvi", {}).get("supervised_umap_weights", [0.2, 0.5, 0.7, 0.9])
             if (not isinstance(weights, list) or not weights
                     or any(isinstance(x, bool) or not isinstance(x, (int, float)) or not 0 <= x <= 1 for x in weights)
@@ -190,12 +199,12 @@ def plan(project: Path, routes_option: str, run_id: str) -> dict:
     else:
         requested = {item.strip() for item in routes_option.split(",") if item.strip()}
         unknown = requested - {"scanpy", "methscan_vmr", "methscan_dmr", "allcools",
-                               "methylvi_allcools", "methylvi_vmr", "methylvi_vmr_dmr"}
+                               "methylvi_allcools", "methylvi_vmr", "methylvi_vmr_dmr", "methylation_iteration"}
         if unknown:
             raise WorkflowError("unknown routes: %s" % ", ".join(sorted(unknown)))
         selected = close_routes({name: name in requested for name in {
             "scanpy", "methscan_vmr", "methscan_dmr", "allcools", "methylvi_allcools",
-            "methylvi_vmr", "methylvi_vmr_dmr",
+            "methylvi_vmr", "methylvi_vmr_dmr", "methylation_iteration",
         }})
         candidate_tasks = make_tasks(selected, cfg["analysis"])
         preflight = validate(project, required_stages=required_environment_stages(candidate_tasks),
@@ -217,6 +226,10 @@ def plan(project: Path, routes_option: str, run_id: str) -> dict:
     if missing:
         raise WorkflowError("workflow contains tasks without an implementation: %s" % ", ".join(missing))
     root = Path(project).resolve()
+    for item in tasks:
+        if item['id'].startswith('methylation_iter_'):
+            from scautopilot.review.methylation import source_evidence
+            item['parameters']['source_evidence'] = source_evidence(root, item['parameters']['spec'])
     run_dir = root / ".workflow" / "runs" / run_id
     if run_dir.exists() and any(run_dir.iterdir()):
         raise WorkflowError("refusing existing non-empty run directory: %s" % run_dir)
@@ -228,6 +241,7 @@ def plan(project: Path, routes_option: str, run_id: str) -> dict:
         "created_at": datetime.now(timezone.utc).isoformat(), "status": "planned",
         "routes": selected, "input_signature": preflight["input_signature"],
         "code_signature": preflight.get("code_signature"),
+        "runtime_identity": runtime_identity(root), "plan_identity_version": 2,
         "git_commit": git_commit(root), "template_lock": template_lock,
         "result_dir": str(root / "Results" / "runs" / run_id), "tasks": tasks,
     }
