@@ -2,6 +2,15 @@
 
 `plan_workflow.py` writes a closed DAG under `.workflow/runs/<run-id>/`; writable analysis outputs go to `Results/runs/<run-id>/`. `submit_workflow.py` revalidates signatures, requires matching full validation, and resumes only incomplete tasks.
 
+Run `audit_runtime.py --project PROJECT` before copying a legacy executor. New
+planner/submission entrypoints refuse missing completion-index or artifact/runtime
+identity wiring. Reuse scientific outputs with their source evidence in a new
+maintained runtime rather than inheriting an old controller's monkeypatches.
+Keep configured project identity and canonical output project consistent; frozen
+runtime paths under `.workflow/run_projects/` are implementation locations, not
+separate biological projects. Custom task commands write under the plan's
+`result_dir`, and emit the same `task_outputs.json` as built-in tasks.
+
 For Slurm, every task independently queries `sinfo`, `scontrol show nodes`, and `squeue` immediately before `sbatch`. Allocation capacity uses `CPUTot-CPUAlloc` and `RealMemory-AllocMem-headroom`; `CPULoad` and `FreeMem` are diagnostic only. The balanced selector requests the target when it fits and may reduce toward the floor. If no current slot fits, `queue_when_busy` (default true) permits a request fitting an allowed healthy node's total capacity and marks `immediately_available: false`. Down/drained nodes are excluded. Set this option false to require current capacity. Observed snapshots are never rewritten to pretend resources are idle.
 
 Dry-run writes `plan_preview.json`, `submission_preview.json` and resource previews;
@@ -12,6 +21,11 @@ scientific dependencies use `afterok`. VMR+DMR models share completed counts and
 their own VMR features, not the preceding model's success.
 
 Resource options and dependencies are passed on the `sbatch` command line. Nodes are not pinned unless a profile explicitly requires it.
+`eligible_partitions` lists allowed healthy partitions that fit the selected CPU
+and memory allocation; submission passes this list directly to Slurm. The selected
+reference node remains diagnostic. Node exclusion/allow lists are enforced in the
+submission as well as in selection. Avoid post-submission partition rewrites or
+replacing the resource selector with a study-specific fallback.
 
 ## Host roles
 
@@ -68,3 +82,40 @@ Before a run can read its inputs, they have to be where it expects them. Generat
 Provisioning and integrity work is not a planned task and is not covered by the execution guard: `validate_project.py --mode full` reads every ALLC file end to end, `bootstrap_environments.py --execute` solves and creates environments, and `link_data.py --execute` transfers downloads. Each runs where it is invoked, because each has to — an environment belongs in the prefix it creates, and a data check has to see the filesystem the run will see. On a site that forbids such work on a login node, run those three inside an allocation. Their results are not a run's completion evidence either way.
 
 A full ALLC validation is the exception to that, because reading a terabyte of ALLC files is not login-node work. It enumerates the files, splits them into byte-balanced chunks, submits one chunk job per chunk, waits, and merges the results; the reading happens on compute nodes. Enumeration, submission, and merging stay on the submitting host, which is the login-node work the rules already allow. The merge is fail-closed: a chunk that is missing, unreadable, built from a different manifest, or that does not account for exactly the files it was handed makes the whole validation invalid and names the chunk, so a partial read can never pass as a complete one. Chunk results whose manifest still matches are reused instead of resubmitted, so a failed chunk does not cost the whole read. Where there is nothing to submit to, or the project is small, the same check runs in place through a process pool. `--skip-full-validation` on `submit_workflow.py` submits without that evidence when none is on disk, records `full_validation_skipped: true` on the plan and on every task record, and writes no evidence file; evidence already on disk and matching the input signature is used either way. `inspect_run.py` reports the evidence state and the ALLC counts beside the verdict, because a full validation of a project whose selected routes include no methylation reads no ALLC file at all and would otherwise look the same as one that read all of them. See [configuration](configuration.md) for the knobs.
+
+For an explicit custom adapter use `plan_custom_workflow.py --project PROJECT
+--spec PROJECT/config/custom_tasks.json --run-id RUN`, then ordinary
+`submit_workflow.py`. The JSON list uses `task()` fields (`name`, `profile`,
+`dependencies`, `parameters`, `environment`, optional `outputs`). Commands must
+be implemented through `analysis.task_commands`; resource profiles must exist.
+The task specification is frozen in config and signed with the runtime. This
+planner does not monkeypatch route selection or implement an analysis method.
+
+## Derived model recovery
+
+A training-only smoke test does not validate the serializer/reader boundary. Before
+rendering, comparison or weighted embeddings, run a read check on the actual H5AD
+in the consumer environment on compute. Inspect producer and consumer Python,
+AnnData and Scanpy versions. A reader lacking `nullable-string-array` support is
+a compatibility failure, not failed model training. Prefer a compatible existing
+environment; otherwise create a separately hashed conversion and verify IDs,
+integer layers, latent values, graphs, labels and saved coordinates. Do not modify
+source H5ADs or upgrade shared environments in place.
+
+`tools/verify_derived_inputs.py` is an optional custom DAG gate. Its spec has a
+`sources` list; each entry declares `path`, `sha256`, `run_dir`, `task_id`, and
+optionally `format: h5ad`, `expected_cells`, `required_obsm`. Invoke it in the
+**downstream consumer environment** with `--spec`, `--output`, `--task-dir`. It
+checks artifact ownership, signatures and the named producer's transitive
+dependencies. Unrelated failed rendering siblings must not block a completed
+model; failed actual ancestors still block. This tool does not poll, retry, train,
+convert files, or validate scientific suitability automatically.
+
+For count-cache recovery, `done` flags or successful process exits alone do not
+prove row content. Investigate invalid posterior priors against raw counts before
+excluding cells. If recomputation contradicts zero cache rows, rebuild affected
+rows in a new run, verify normal-row controls and independent interval queries,
+and preserve the original cohort unless a justified QC decision says otherwise.
+Checkpoints should publish verified chunks atomically, or flush/verify data before
+publishing completion markers. An interruption must not make a completion flag
+more authoritative than the stored counts.

@@ -1,5 +1,11 @@
 # MethSCAn, VMR, and DMR
 
+Paired-cell eligibility follows [paired doublets](paired-doublets.md): score DNAm
+with MethylScrublet per capture library before applying the shared reviewed
+RNA/DNAm exclusion list. Copying an RNA-only deletion list is not dual-modality
+detection. Raw conversion/count preparation may precede this gate; final smooth,
+VMR/DMR and model outputs must bind the finalized eligible cell set.
+
 For user-supplied accelerated releases, read [acceleration backends](acceleration.md).
 
 For parameter improvement read [MethSCAn/MethylVI iteration](methylation-optimization.md).

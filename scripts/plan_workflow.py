@@ -187,6 +187,8 @@ def required_environment_stages(tasks: List[dict]) -> set[str]:
 
 
 def plan(project: Path, routes_option: str, run_id: str) -> dict:
+    from audit_runtime import require_contract
+    require_contract(project)
     if not run_id.strip() or "/" in run_id or run_id in {".", ".."}:
         raise WorkflowError("run-id must be a non-empty path-safe name")
     cfg = load_project(project)

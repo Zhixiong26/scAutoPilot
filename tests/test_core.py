@@ -1214,7 +1214,9 @@ class SkillTests(unittest.TestCase):
             self.assertIn("submit host", refused.stderr)
 
     def test_a_local_run_records_the_host_it_ran_on(self):
-        with tempfile.TemporaryDirectory() as temp:
+        # This fixture emulates a standalone host even when the suite itself is
+        # legitimately running inside a compute allocation.
+        with tempfile.TemporaryDirectory() as temp, mock.patch.dict(os.environ, {'SLURM_JOB_ID':'', 'SLURM_JOBID':''}):
             project = self.generate(Path(temp), "rna")
             subprocess.check_call([sys.executable, str(ROOT / "scripts" / "plan_workflow.py"),
                                    "--project", str(project), "--routes", "auto", "--run-id", "unit"])

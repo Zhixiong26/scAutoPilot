@@ -26,6 +26,7 @@ from _common import (
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = SKILL_ROOT / "assets" / "project-template"
 RUNTIME_TOOLS = (
+    "audit_runtime.py", "render_embedding_revision.py", "plan_custom_workflow.py", "verify_derived_inputs.py",
     "_common.py", "bootstrap_environments.py", "validate_project.py", "plan_workflow.py", "inspect_resources.py",
     "submit_workflow.py", "inspect_run.py", "update_report.py", "record_annotation_review.py", "link_data.py",
     "review_scanpy_iteration.py", "apply_scanpy_round.py", "system_one_adapter_runner.py",
@@ -34,6 +35,7 @@ RUNTIME_TOOLS = (
     "prepare_scanpy_candidate_reference.py",
     "optimization_state.py",
     "run_methylation_iteration.py",
+    "run_methylation_reads_qc.py", "plan_methylation_reads_qc.py",
     "propose_methylvi_trial.py",
     "bootstrap_acceleration.py", "run_accelerated.py", "run_vmrseq_cpu.R",
 )

@@ -1,5 +1,12 @@
 # Intake and configuration
 
+For paired doublet analysis, explicitly collect per-cell `library_id` and
+`donor_id` alongside `cell_id` in an input metadata sidecar; do not assume one
+sample equals one capture. These are requirements of the [paired protocol](paired-doublets.md),
+not new automatically validated schema-v2 sample columns. Resolve capture
+identity before running the detectors; the legacy sample manifest alone may
+be insufficient.
+
 `init_project.py` generates schema v2 projects and accepts v1 or v2 intake during migration. Generated loaders continue to read schema v1 with deprecation warnings. JSON-compatible YAML works without PyYAML.
 
 Each schema-v2 sample supplies `sample_id`, `condition`, `batch`, `include`, RNA fields, `allc_root`, `allc_glob`, `cell_id_prefix`, and optional `allc_cell_id_regex`/`allc_cell_id_replacement`. Sample ownership always comes from its manifest row. Without a regex, common ALLC suffixes are removed and the prefix is prepended. An included sample must provide RNA and/or ALLC.
@@ -86,3 +93,18 @@ RNA enables Scanpy. ALLC enables VMR, ALLCools, and unsupervised MethylVI; the w
 Stage scripts and wrappers read project values from the neutral `SCMO_*` namespace, which the run DAG injects from `config/`. Route configs may keep a source-flavoured inner name (`MVI_*`, `VMR_*`, bare lowercase) internally, but each one re-exports the resolved value under its `SCMO_*` name, and new code reads only the neutral name. Exported `SCMO_*` values are never silently overwritten by a later-sourced config; alias assignments use `:-` guards.
 
 Paths in the packaged scripts are project-root-relative or environment-supplied. No project root, login or compute node name, shared filesystem path, scheduler account, or absolute interpreter path is hardcoded outside `config/examples/`. Host policy follows the same rule from the other side: which host a task may run on is detected at run time from Slurm's own variables and a controller probe, never assumed or written into packaged code.
+
+## Derived-only custom DAG inputs
+
+For a plot revision or analysis of already produced artifacts, declare
+`analysis.prepared_inputs: {kind: derived_artifacts, manifest: config/prepared.json}`.
+The manifest contains explicit `sample_ids` matching every included metadata row
+and a non-empty `artifacts` list with `path`, `bytes`, and `sha256`. Relative paths
+are anchored to the manifest. Samples then have empty RNA/ALLC columns; do not
+label processed BED or H5AD as raw RNA, ALLC, or an unrelated H5MU extension.
+Quick validation checks identity/size; full validation verifies the hashes. Both
+produce the same signature for unchanged inputs. A changed manifest or source
+metadata changes that signature. This input kind is limited to a custom DAG with
+no selected raw-data routes; it does not implement a new raw-data converter.
+The task must additionally validate its declared producer tasks and source schema.
+A successful derived-only validation is not a claim that raw ALLCs were reread.

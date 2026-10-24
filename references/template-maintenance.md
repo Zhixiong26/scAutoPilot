@@ -1,5 +1,36 @@
 # Template maintenance
 
+Version 0.15.4 adds `verify_derived_inputs.py`, consumer-side H5AD diagnostics,
+producer-scoped dependency validation and regression tests. Distribute the helper
+with the renderer and generator; these change execution signatures. Synchronize
+source, installed and project skill copies, but preserve frozen historical and
+active executors. This release adds explicit checks, not automatic retries or
+background repairs.
+
+
+Version 0.15.3 adds deployed-runtime capability checks at planning/submission,
+explicit checksum-bound `derived_artifacts` inputs for custom derived-only DAGs,
+and `render_embedding_revision.py`. Scheduler recommendations retain all allowed
+healthy partitions that fit the exact allocation, and submission applies node
+exclusions. Result indexes now group task inventories under one run page.
+Distribute the complete current `tools/` set and `Scripts/Common/` together in
+a new frozen runtime; this changes execution signatures. Do not patch historical
+plans, relabel old evidence as sealed, or overwrite old figures. The audit tool
+checks static wiring, not scientific truth or an arbitrary adapter's compliance.
+
+Version 0.15.2 adds optional `run_methylation_reads_qc.py` and
+`plan_methylation_reads_qc.py` runtime tools. This is a pinned-source diagnostic
+DAG, not an automatic doublet detector or filtering route. Upgrade idle project
+tools, revalidate, and freeze a new run; historical runs remain unchanged.
+
+Version 0.15.1 defines the paired-doublet agent policy in `paired-doublets.md`:
+Scrublet/scDblFinder RNA comparison and selection + MethylScrublet by independent capture library, reviewed shared
+filtering, and a compact decision table. This is documentation/policy only;
+packaged legacy Scrublet notebook execution and config schema are unchanged.
+Do not claim an automatic paired detector DAG, modify frozen analyses, or run
+early RNA deletion under the new policy. Explicit official-method deployment,
+smoke tests and a shared-mask integration are required for production adoption.
+
 Version 0.15.0 adds `bootstrap_acceleration.py`, `run_accelerated.py` and
 `run_vmrseq_cpu.R` to generated runtime tools. External packages stay outside the
 skill and are inventoried by SHA-256. MethSCAn opt5 CPU uses the existing DAG

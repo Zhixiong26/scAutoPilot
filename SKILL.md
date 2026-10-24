@@ -59,6 +59,13 @@ not authorize execution, annotation approval, or unrelated experiments.
    [documentation](references/documentation.md) when changing these contracts.
 
 Respect task resource floors; do not pin nodes without a data/hardware need.
+Before copying an older project executor, run the maintained
+`scripts/audit_runtime.py --project <executor>` against that exact runtime.
+New plan/submission entrypoints also check the deployed completion hook and
+identity guards. Upgrade a separate idle runtime if these are absent; copying
+an old executor does not apply the installed skill's fixes. Custom adapters
+retain the same scheduler, output, index and figure contracts as built-in routes.
+For cached-model consumers, verify the actual H5AD with the consumer environment and gate only on its producer and required ancestors. Use `verify_derived_inputs.py`; see [execution](references/execution.md#derived-model-recovery).
 Report reserved CPU/memory separately from measured load and free memory. Use
 isolated smoke tests after runtime, environment or high-risk route changes.
 Preserve active frozen runtimes during upgrades. New plans verify executable and
@@ -68,6 +75,23 @@ scientific dependency. Follow the signed output and recovery contracts in
 [execution](references/execution.md), including idempotent result-index updates.
 
 ## Annotation and iterative decisions
+
+For SeekGene method 2 or methylation read-depth QC, read
+[methylation reads QC](references/methylation-reads-qc.md). Use the portable
+opt-in diagnostic DAG; pin true per-barcode count sources, validate IDs, retain
+missing evidence, and keep review flags separate from doublet calls. Never
+substitute selected-bin CpG coverage for read counts or delete cells from this
+metric alone.
+
+For paired RNA–DNAm doublet handling, read [paired doublets](references/paired-doublets.md)
+before planning QC: per independent capture library, compare official RNA
+Scrublet versus scDblFinder on identical pre-filter inputs, select one with
+recorded evidence, then reconcile it with DNAm MethylScrublet. Review discordant/
+missing evidence and apply one finalized cell-ID exclusion list to both modalities.
+This is method selection, not union/intersection or voting of RNA calls. Library
+identity is not inferred from donor/sample names. Preserve the nine-column
+decision table and raw inputs. The packaged legacy Scrublet executor is not this
+new policy; verify explicit deployment and shared filtering before claiming it runs.
 
 A Scanpy candidate needs a complete proposed annotation. Match a supplied
 per-cell reference by exact cell ID; otherwise use this run's markers, QC, sample
@@ -169,6 +193,10 @@ Every individual embedding uses `Scripts/Common/embedding_plot.py` and
 square axes, categorical legend outside the panel in one column, and a vertical
 numerical color bar. No tight cropping. Split overcrowded comparisons into
 individual panels. Dotplots and heatmaps need not be square.
+For a custom saved-H5AD embedding, use `tools/render_embedding_revision.py`
+with an explicit source-task and panel specification. It checks exported canvas,
+axes, legend and colorbar geometry and records palette provenance. A readable
+preview alone cannot pass these checks; record visual review separately.
 
 Selected routes receive a comparison delivery before the workflow summary.
 Read [batch figure delivery](references/figures-comparison.md) for source adapters,

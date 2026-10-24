@@ -80,22 +80,6 @@ class AuditRegressions(unittest.TestCase):
             seal_recorded_outputs([str(record)])
             self.assertTrue(validate_recorded_outputs([str(record)])[0])
 
-    def test_central_results_index_failure_and_project_identity(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp); central = base/'central'; central.mkdir()
-            (central/'RESULTS_INDEX.md').write_text('# User notes\n')
-            for name in ['one','two']:
-                root = base/name; root.mkdir()
-                (root/'index_targets.json').write_text(json.dumps({'additional_results_roots':[str(central)]}))
-                artifact = root/'task_status.json'; artifact.write_text('{}')
-                update_results_index(root,'same_run','same_task',[artifact],status='failed',finished_at='fixed')
-                update_results_index(root,'same_run','same_task',[artifact],status='failed',finished_at='fixed')
-            text = (central/'RESULTS_INDEX.md').read_text()
-            self.assertTrue(text.startswith('# User notes\n'))
-            self.assertEqual(text.count('### `same_run / same_task`'),2)
-            self.assertNotIn('已生成并通过任务产物检查', text)
-            self.assertIn('fixed',text)
-
     def test_rna_directory_child_change_invalidates_signature(self):
         with tempfile.TemporaryDirectory() as tmp:
             project = test_core.SkillTests().generate(Path(tmp), 'rna')

@@ -192,7 +192,11 @@ class NumericTests(unittest.TestCase):
         submit(self.root, 'screen')
         result = inspect_run(self.root, 'screen')
         self.assertEqual(result['status'], 'complete', result)
-        self.assertIn('methylation_iter_', (self.root / 'Results/RESULTS_INDEX.md').read_text())
+        index = (self.root / 'Results/RESULTS_INDEX.md').read_text()
+        pages = list((self.root / 'Results/Index/runs').glob('screen-*.md'))
+        self.assertEqual(len(pages), 1)
+        self.assertIn(pages[0].relative_to(self.root / 'Results').as_posix(), index)
+        self.assertIn('methylation_iter_', pages[0].read_text())
 
     def run_loop(self, mode):
         from figures_comparison_evidence import sha

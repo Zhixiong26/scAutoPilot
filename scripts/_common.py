@@ -406,7 +406,29 @@ def _write_results_index(results_root, run_id, task_id, artifacts, status, finis
     if len(paths) > len(selected):
         text += '\n\n共 %d 项存在的产物；完整列表见任务 task_outputs.json。' % len(paths)
     text += '\n' + end
-    with (root / '.results_index.lock').open('a') as lock:
+    # One compact run entry at the top level; task inventories live on a run page.
+    run_key = signature({'project_results': str(source_root), 'run': run_id})[:24]
+    label = re.sub(r'[^A-Za-z0-9_.-]+', '-', str(run_id))[:90]
+    detail = root / 'Index' / 'runs' / (label + '-' + run_key[:8] + '.md')
+    _replace_index_block(detail, start, end, text)
+    run_start, run_end = '<!-- result-run:%s:start -->' % run_key, '<!-- result-run:%s:end -->' % run_key
+    link = detail.relative_to(root).as_posix()
+    compact = (run_start + '\n### `%s`\n\n来源：`%s`。' % (run_id, source_root)
+               + ' [逐任务状态、图件与产物](<%s>)。\n' % link
+               + '最近更新任务：`%s`（`%s`）；整批完成状态以 run_summary.json 为准。\n' % (task_id, status))
+    if finished_at:
+        compact += '该任务结束时间：`%s`。\n' % finished_at
+    compact += run_end
+    _replace_index_block(index, run_start, run_end, compact)
+
+
+def _replace_index_block(index, start, end, text):
+    import fcntl
+    import tempfile
+    index = Path(index)
+    root = index.parent
+    root.mkdir(parents=True, exist_ok=True)
+    with (root / ('.' + index.name + '.lock')).open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         original = index.read_text(encoding='utf-8') if index.exists() else '# Results index\n'
         if start in original:
@@ -768,7 +790,7 @@ def write_tsv(path: Path, columns: Iterable[str], rows: Iterable[Dict[str, Any]]
             writer.writerow({key: row.get(key, "") for key in writer.fieldnames})
 
 
-def load_samples(project: Path, require_paths: bool = True) -> List[Dict[str, Any]]:
+def load_samples(project: Path, require_paths: bool = True, prepared_sample_ids=None) -> List[Dict[str, Any]]:
     files = project_files(project)
     with files["samples"].open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle, delimiter="\t")
@@ -799,7 +821,7 @@ def load_samples(project: Path, require_paths: bool = True) -> List[Dict[str, An
                 row[field] = str(resolved) if resolved else ""
                 if include and require_paths and resolved and not resolved.exists():
                     errors.append("line %d %s does not exist: %s" % (line_no, field, resolved))
-            if include and not row["rna_path"] and not row["allc_root"]:
+            if include and not row["rna_path"] and not row["allc_root"] and sample_id not in (prepared_sample_ids or set()):
                 errors.append("line %d must provide RNA and/or ALLC input" % line_no)
             if row["rna_path"] and not raw["rna_format"].strip():
                 errors.append("line %d requires rna_format" % line_no)

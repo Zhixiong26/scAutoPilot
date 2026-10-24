@@ -1,10 +1,17 @@
 # Single-cell Multiomics Analysis
 
+0.15.4：增加旧运行器启动检查、已有产物输入校验、标准 UMAP 重绘工具；调度直接使用符合条件的允许分区，总索引按运行聚合。历史运行不自动升级。
+
 A portable Codex skill for configuration-driven single-cell RNA and DNA-methylation analysis with Scanpy/Harmony, MethSCAn, ALLCools, and MethylVI.
 
 一个由配置驱动的通用 Codex Skill，用于执行 Scanpy/Harmony 单细胞 RNA、MethSCAn VMR/DMR、ALLCools 特征构建和 MethylVI 分析。
 
 ## 中文使用说明
+
+0.15.1：新增[配对doublet执行规则](references/paired-doublets.md)：独立捕获文库内
+RNA Scrublet与scDblFinder同输入对照后择一 → DNAm MethylScrublet → 不一致/缺失证据复核 → 按cell ID统一过滤。
+RNA对照用于方法选择，不合并两工具删除名单，不自动修改历史数据。此版本更新skill协议；旧Notebook的
+Scrublet尚未被替换为该双模态执行器，正式采用前必须完成显式部署和smoke测试。
 
 0.15.0：新增本地 Bismark / MethSCAn / vmrseq 加速包的校验、隔离安装和调用适配，详见 [加速后端](references/acceleration.md)。MethSCAn opt5 CPU 复用现有 DAG；Bismark 与 vmrseq 使用独立入口，GPU 需计算节点和相应依赖。不会自动切换已有项目环境。
 

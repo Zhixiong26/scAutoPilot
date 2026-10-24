@@ -384,6 +384,44 @@ def allc_cell_id(path: Path, row: dict) -> str:
     return value if not prefix or value.startswith(prefix + "_") else prefix + "_" + value
 
 
+def prepared_inventory(project, cfg, mode, selected_routes):
+    """Explicit derived-artifact input, never an invented RNA/ALLC file type."""
+    setting = cfg.get('analysis', {}).get('prepared_inputs')
+    if setting is None:
+        return None
+    if not isinstance(setting, dict) or setting.get('kind') != 'derived_artifacts':
+        raise WorkflowError('prepared_inputs.kind must be derived_artifacts')
+    if selected_routes:
+        raise WorkflowError('prepared_inputs requires an explicit custom derived-only DAG, without raw-data routes')
+    manifest = resolve_path(Path(project), setting.get('manifest'))
+    if manifest is None or not manifest.is_file():
+        raise WorkflowError('prepared_inputs manifest is missing')
+    data = json.loads(manifest.read_text(encoding='utf-8'))
+    ids = data.get('sample_ids')
+    if not isinstance(ids, list) or not ids or any(not isinstance(x, str) for x in ids) or len(set(ids)) != len(ids):
+        raise WorkflowError('prepared_inputs requires unique explicit sample_ids')
+    artifacts = data.get('artifacts')
+    if not isinstance(artifacts, list) or not artifacts:
+        raise WorkflowError('prepared_inputs requires non-empty artifacts with SHA-256')
+    records = []
+    for item in artifacts:
+        path = resolve_path(manifest.parent, item.get('path'))
+        digest = item.get('sha256', '')
+        if path is None or not path.is_file() or not re.fullmatch('[0-9a-f]{64}', digest):
+            raise WorkflowError('invalid prepared artifact path or SHA-256')
+        stat = path.stat()
+        if stat.st_size != item.get('bytes') or stat.st_size == 0:
+            raise WorkflowError('prepared artifact size mismatch: %s' % path)
+        if mode == 'full' and sha256_file(path) != digest:
+            raise WorkflowError('prepared artifact SHA-256 mismatch: %s' % path)
+        records.append({'path': str(path), 'bytes': stat.st_size, 'mtime_ns': stat.st_mtime_ns,
+                        'sha256': digest})
+    if len({x['path'] for x in records}) != len(records):
+        raise WorkflowError('duplicate prepared artifact')
+    return {'manifest': str(manifest), 'manifest_sha256': sha256_file(manifest),
+            'sample_ids': ids, 'artifacts': records}
+
+
 def validate(project: Path, require_paths: bool = True, mode: str = "quick", workers: int = 1,
              required_stages: set[str] | None = None,
              selected_routes: set[str] | None = None) -> dict:
@@ -391,8 +429,13 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
         raise WorkflowError("validation mode must be quick or full")
     files = project_files(project)
     cfg = load_project(project)
-    samples = load_samples(project, require_paths=require_paths)
+    prepared = prepared_inventory(project, cfg, mode, selected_routes)
+    samples = load_samples(project, require_paths=require_paths,
+                           prepared_sample_ids=set(prepared['sample_ids']) if prepared else None)
     active = [row for row in samples if row["include"]]
+    if prepared and (set(prepared['sample_ids']) != {x['sample_id'] for x in active}
+                     or any(x['rna_path'] or x['allc_root'] for x in active)):
+        raise WorkflowError('prepared-input sample IDs must exactly match the active metadata-only samples')
     errors, warnings = [], []
     delivery = cfg.get("analysis", {}).get("figures_comparison", {})
     if not isinstance(delivery, dict) or not isinstance(delivery.get("enabled", True), bool):
@@ -733,6 +776,8 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
         # signed: the declared sources are already part of the input signature, and
         # a link's transient state would otherwise churn that signature for nothing.
         "data": data_validation,
+        "prepared_inputs": prepared,
+        "prepared_content_hashes_verified": bool(prepared and mode == 'full'),
         "code_signature": code_signature, "errors": errors, "warnings": warnings,
         # Which host ran this check. Provenance, like `data` above, and for the
         # same reason kept out of the signature below: a signature that changed
@@ -749,6 +794,7 @@ def validate(project: Path, require_paths: bool = True, mode: str = "quick", wor
     payload["input_signature"] = signature({
         "project": {key: value for key, value in cfg.items() if key not in {"project_root", "config_files"}},
         "samples": active, "rna_inventory": rna_inventory, "allc_inventory": allc_inventory,
+        "prepared_inputs": prepared,
         "allc_cell_ids": allc_cell_ids, "annotation_sha256": annotation_hash,
         "code_signature": code_signature, "references": reference_hashes,
         "environments": env_results, "routes": routes,

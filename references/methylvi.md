@@ -1,5 +1,10 @@
 # ALLCools and MethylVI
 
+Before new paired-model fitting, follow [paired doublets](paired-doublets.md).
+MethylScrublet scores DNAm mc/cov, not MethylVI latent or supervised UMAP;
+training consumes the finalized cell-level mask shared with RNA. A prior RNA
+Scrublet filter is not evidence of this paired policy having been executed.
+
 ALLCools may rank blacklist-filtered bins for feature selection. MethylVI must use integer per-cell/per-feature `mc` and `cov`, not hypo-score.
 
 Require unique cells/features, integral nonnegative counts, `mc <= cov`, explicit batch metadata, and a source manifest. Derive expected cells from the filtered-cell authority; zero is never a runtime default. Context, references, thresholds, feature targets, epochs, batch size, and the validation fraction come from `analysis.yaml`. Nested feature targets come deterministically from one ranked maximum-feature input. `methylvi.validation_fraction` reaches scvi as `validation_size`, and `train_size` is set to `1 - validation_fraction` alongside it: scvi defaults `train_size` to 0.9 on its own and rejects `train_size + validation_size > 1`, so passing only the validation size would fail for any fraction above 0.1.

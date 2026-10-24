@@ -117,3 +117,21 @@ atlases, `render_readable_heatmap_audit.py` and
 `render_balanced_dmr_display.py`. These are provenance examples, not runtime
 dependencies. Their project paths, palettes, run IDs, selected counts and manual
 decisions are intentionally not packaged as universal defaults.
+
+## Custom saved-H5AD embedding revisions
+
+Use `tools/render_embedding_revision.py --project PROJECT --spec SPEC.json
+--output NEW_REVISION_DIRECTORY --task-dir TASK_DIRECTORY` as a custom DAG task.
+The JSON specification contains `source` (`path`, `sha256`, `run_dir`, `task_id`),
+`annotation_status`, `description`, optional `point_size`, and a `panels` list
+(`key`, `title`, `kind`: categorical or continuous). All source columns must exist.
+The declared source task must have valid evidence and list that exact H5AD.
+
+The renderer exports numbered individual PNG/PDF panels, low-resolution previews,
+a preview-only contact sheet, coordinates/labels and composition tables, and a
+checksum-bound manifest. It checks 2400×2400 pixels, square axes with isotropic
+units, external single-column categorical legends, and vertical numerical bars.
+Source palettes take precedence; a Scanpy default reconstruction is named as such.
+No clinical condition or new annotation is inferred. Review every preview and
+representative full-size categorical/numerical panels, then save a separate
+hash-bound review. Do not call a general preview readability pass a geometry pass.

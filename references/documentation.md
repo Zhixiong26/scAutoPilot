@@ -51,6 +51,13 @@ For runs containing figures_comparison, root and touched stage logs additionally
 
 ## Results and figure index
 
+New completion hooks keep one compact project/run block in the top-level index
+and detailed task inventories in `Results/Index/runs/<run>-<identity>.md`.
+Two source projects with the same run ID remain distinct. Existing human notes
+and historical flat blocks are preserved; a layout update does not move scientific
+outputs or rewrite old paths. Frozen executor `Results` links determine the
+canonical output root even when that directory has a different name.
+
 Maintain `Results/RESULTS_INDEX.md` as a discoverable navigation document,
 separate from the stable project README and the evidence-owned Report run log.
 Updating this index is part of figure delivery, recovery and progress inspection;

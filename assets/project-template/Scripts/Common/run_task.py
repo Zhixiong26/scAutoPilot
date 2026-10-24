@@ -157,8 +157,9 @@ def main() -> int:
     # advertises unvalidated scientific files as completed artifacts.
     if code in (0, 1) or state['status'] == 'failed':
         try:
-            result = Path(variables['result_dir'])
-            results_root = next((p for p in result.parents if p.name == 'Results'), None)
+            # Use the configured project link, not an ancestor's spelling.
+            # Frozen runtimes may link Results to a differently named directory.
+            results_root = (root / 'Results').resolve()
             if results_root is not None:
                 artifacts = list(outputs) + [str(task_dir / 'task_status.json')]
                 for path in outputs:

@@ -1,6 +1,6 @@
 # Scanpy and Harmony
 
-The portable implementation accepts 10x directories, ZIP archives containing exactly one matrix, and 10x H5. It performs per-sample QC, optional Scrublet, concatenation, normalization, HVG, PCA, optional Harmony, neighbours, UMAP, Leiden, markers, and guarded annotation.
+The portable implementation accepts 10x directories, ZIP archives containing exactly one matrix, and 10x H5. Its legacy notebook performs per-sample QC, optional Scrublet, concatenation, normalization, HVG, PCA, optional Harmony, neighbours, UMAP, Leiden, markers, and guarded annotation. For new paired analyses follow [paired doublets](paired-doublets.md): compare Scrublet versus scDblFinder on identical per-capture inputs, select one RNA method, then reconcile with MethylScrublet before unified filtering. The legacy Scrublet path alone does not implement this policy and must not remove cells before DNAm scoring.
 
 RNA cell IDs use explicit `cell_id_prefix`. Preserve raw counts in `layers['counts']` and log-normalized full-gene values in `raw`. An annotation profile is valid only when its analysis signature and expected cluster set match exactly.
 

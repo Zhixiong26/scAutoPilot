@@ -127,6 +127,8 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
            allow_login_execution: bool = False, skip_full_validation: bool = False) -> dict:
     root = Path(project).resolve()
     run_dir, plan = load_plan(root, run_id)
+    from audit_runtime import require_contract
+    require_contract(root)
     required_stages = {stage for item in plan.get("tasks", [])
                        for stage in item.get("required_environments", [item.get("environment", "orchestrator")])}
     selected_routes = {name for name, enabled in plan.get("routes", {}).items() if enabled}
@@ -316,7 +318,7 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
             output.parent.mkdir(parents=True, exist_ok=True)
             sbatch = [
                 "sbatch", "--parsable", "--job-name", "scmo_%s" % task_id[:60],
-                "--partition", recommendation["partition"],
+                "--partition", ",".join(recommendation.get("eligible_partitions") or [recommendation["partition"]]),
                 "--cpus-per-task", str(recommendation["cpus"]),
                 "--mem", recommendation["memory"], "--time", recommendation["time"],
                 "--output", str(output), "--error", str(error),
@@ -330,6 +332,12 @@ def submit(project: Path, run_id: str, dry_run: bool = False,
                 sbatch.extend(["--dependency", dependency_argument])
             if recommendation.get("pin_node"):
                 sbatch.extend(["--nodelist", recommendation["reference_node"]])
+            excluded = set(scheduler.get('exclude_nodes') or [])
+            allowed = set(scheduler.get('allow_nodes') or [])
+            if allowed:
+                excluded.update(n['name'] for n in snapshot.get('nodes', []) if n['name'] not in allowed)
+            if excluded:
+                sbatch.extend(['--exclude', ','.join(sorted(excluded))])
             sbatch.extend([str(wrapper)] + command)
             output_text = subprocess.check_output(sbatch, cwd=str(root), stderr=subprocess.STDOUT).decode("utf-8").strip()
             job_id = output_text.split(";", 1)[0]

@@ -9,7 +9,7 @@ or repository commit actually executed; a citation is not execution evidence.
 
 | 环节 | 优先考虑的方法 | 本 skill 中的状态与用途 |
 |---|---|---|
-| RNA doublet/QC 异常 | Scrublet；必要时 scDblFinder 交叉检查 | Scrublet 已在 Notebook；scDblFinder 是可选独立实验，不自动改筛选 |
+| 配对 RNA/DNAm doublet | RNA Scrublet/scDblFinder同输入比较后择一 + DNAm MethylScrublet | 按捕获文库检测、复核不一致证据、统一过滤；[协议与迁移边界](paired-doublets.md)，不取两RNA工具删除并集 |
 | PCA/邻居/Leiden 候选确认 | chooseR 重采样稳健性 | 外部方法协议；当前 ARI/Jaccard 种子检查不是 chooseR |
 | 分辨率诊断 | clustree | 外部可视化协议；不等于自动选最佳 resolution |
 | Harmony/整合质量 | scIB / scib-metrics | 外部 benchmark 协议；当前近似 sample-mixing 指标不是官方 iLISI |
@@ -46,14 +46,13 @@ TPE 的依据是 [Bergstra et al., NeurIPS 2011](https://proceedings.neurips.cc/
 
 ## Scanpy：不要只凭 silhouette 选择细胞划分
 
-### Doublet 争议时才增加交叉检查
+### 配对双模态检测，不叠加多个 RNA 工具
 
-按实际 capture/library 用原始 RNA counts 分别执行 Scrublet，检查模拟 score 分布、
-阈值、检测比例和可解释的混合谱系。必要时在相同输入上另跑 scDblFinder，保存逐细胞
-一致/不一致表及各样本保留率；两个工具不是独立实验真值，不做多数投票式自动删除。
-平台预期率不是一个通用于所有建库的常数，更不是要求恰好删除该比例。参见
-[Scrublet 官方实现](https://github.com/swolock/scrublet) 和
-[scDblFinder 官方教程](https://bioconductor.org/packages/release/bioc/vignettes/scDblFinder/inst/doc/scDblFinder.html)。
+按独立捕获文库使用相同原始RNA counts对照Scrublet与scDblFinder，择一作为RNA检测器；使用DNAm mc/cov执行
+ALLCools MethylScrublet；两边完成评分前不按RNA doublet结果预先删除DNAm细胞。
+集中复核不一致及缺失证据，最终按cell ID同步过滤，保留九列决策表。
+两个RNA工具用于方法选择，不取并集、交集或多数投票删除；不增加更多工具或开发替代检测方法，不把两工具一致当独立真值。
+执行边界、官方来源、缺失状态和决策表见[配对doublet协议](paired-doublets.md)。
 
 ### chooseR：确认分辨率和表示候选的稳健性
 

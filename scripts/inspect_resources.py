@@ -146,13 +146,33 @@ def choose(nodes: List[Dict[str, Any]], scheduler: Dict[str, Any], profile: Dict
         raise WorkflowError("no active Slurm node satisfies the resource floor")
     candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
     unused_fit, unused_waste, node, cpus, memory_mb = candidates[0]
-    return {
+    result = {
         "partition": node["partition"], "reference_node": node["name"],
         "cpus": cpus, "memory_mb": memory_mb, "memory": "%dM" % memory_mb,
         "time": profile["target"].get("time", "1-00:00:00"),
         "pin_node": bool(profile.get("pin_node", False)),
         "immediately_available": True, "selection_basis": "current_schedulable_capacity",
     }
+    # A diagnostic reference node is not a placement restriction. Let Slurm use
+    # every allowed healthy partition that fits this exact allocation, including
+    # currently busy nodes. Keep the measured snapshot unchanged.
+    eligible = set()
+    for other in nodes:
+        if other['state'] not in ACTIVE_STATES | {'allocated'}:
+            continue
+        if any(flag in other.get('state_detail', '').upper() for flag in ('DRAIN', 'DOWN', 'FAIL', 'NOT_RESPONDING')):
+            continue
+        if allowed_partitions and other['partition'] not in allowed_partitions:
+            continue
+        if allowed_nodes and other['name'] not in allowed_nodes:
+            continue
+        if other['name'] in excluded_nodes or (result['pin_node'] and other['name'] != node['name']):
+            continue
+        if (other.get('cpu_total', 0) >= cpus and
+                other.get('real_memory_mb', 0) - int(scheduler.get('memory_headroom_mb', 4096)) >= memory_mb):
+            eligible.add(other['partition'])
+    result['eligible_partitions'] = [node['partition']] + sorted(eligible - {node['partition']})
+    return result
 
 
 def inspect(project: Path, task: str, sinfo_file: Optional[Path] = None, scontrol_file: Optional[Path] = None, squeue_file: Optional[Path] = None,
