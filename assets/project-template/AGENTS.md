@@ -31,8 +31,15 @@ the skill was not explicitly invoked:
   no tight cropping. The helper may be imported by temporary scripts.
 - Dotplots/heatmaps/comparison canvases use an appropriate layout; do not force
   them square. Export individual standard embedding panels alongside previews.
-- Preserve saved coordinates, cells, labels, order and palette for plot-only
-  revisions. Keep gene scales, missingness, denominators and support counts
+- Pure appearance edits may directly overwrite requested figures without a new
+  revision directory or another approval. Typography, legend grouping/order,
+  wrapping, spacing, colours and point styling may change; preserve coordinates,
+  cells, measurements, cluster membership and biological label meaning. Verify
+  temporary renders before replacement and refresh affected manifests, artifact
+  checksums, visual review, previews and index links. Wait for any active writer.
+  Data or scientific/annotation changes require a new result revision.
+- Preserve unrequested display settings for plot-only edits. Keep gene scales,
+  missingness, denominators and support counts
   explicit and export the numerical source tables.
 - DMR heatmaps require raw mean ratio, DMR-wise Z-score, display-compressed
   Z-score and mean of saved single-cell Z-scores, with missing coverage retained;

@@ -1,5 +1,13 @@
 # Template maintenance
 
+Version 0.16.2 permits direct replacement of figures for requested pure appearance
+changes. No mandatory new revision or additional approval is needed; scientific
+inputs/identities remain unchanged and affected artifact/checksum/visual-review
+records must be refreshed. This is a documentation and generated AGENTS policy
+update, not a new overwrite CLI flag or an automatic resealing implementation.
+Scientific changes still require new results. Existing runtime signatures are
+unchanged by this documentation-only release.
+
 Version 0.16.1 fixes candidate annotation delivery: no-reference numerical output
 is explicitly `candidate_annotation_incomplete`, placeholder cell-type plots are
 suppressed, and the run inspector requests agent completion before delivery.

@@ -11,7 +11,27 @@ separate derived deliveries and do not retroactively complete that DAG task.
 
 Resolve the exact run, annotation revision, H5AD/coordinate table, metadata,
 marker settings and palette. Verify source task evidence and artifact hashes.
-Use a new revision directory; preserve rejected/superseded attempts with reasons.
+Pure appearance adjustments may directly overwrite the requested existing
+figures. Do not require a new revision directory, backup copy or user approval
+for typography, legend grouping/order, line wrapping, spacing, colours,
+display-only point size/opacity, or another presentation-only change explicitly
+requested by the user. Preserve cell membership, expression/measurement values,
+coordinates, cluster membership and biological label meaning. Do not rewrite
+the source H5AD merely to change a figure's appearance.
+
+Render to temporary files and verify them before replacing the requested files;
+keep PNG/PDF and affected previews consistent. Update the affected figure
+manifest, checksums/sealed artifact records, visual-review record and result
+index so an intentional replacement is not reported as artifact corruption.
+Do not change historical scientific signatures or invent a new analysis run.
+An active writer is a concurrency constraint: wait for it to finish before
+replacing its output. A renderer's existing nonempty-directory guard is an
+implementation limitation, not a requirement to ask the user or create a
+permanent revision; adapt the targeted rendering/publishing step as needed.
+
+Use a new result revision when the change alters data, cell membership,
+coordinates, clustering, biological annotation meaning or analysis settings,
+or when the user explicitly asks to preserve multiple versions.
 Rendering does not rerun PCA, Harmony, neighbors, UMAP, Leiden or training.
 
 The plot-settings record contains source run and analysis signature, annotation
@@ -36,7 +56,9 @@ AnnData presentation metadata should use parallel `*_display_order` and
   both axes geometry and equal horizontal/vertical unit scale; a square canvas
   alone is insufficient. Keep categorical legends single-column and numerical
   bars outside each panel. Atlas canvases may be rectangular with square panels.
-- **Colours:** preserve the source's explicit display order/palette first, then
+- **Colours:** when the user requests a presentation change, apply the requested
+  display order/palette and record it consistently across the affected views;
+  otherwise preserve the source's explicit display order/palette first, then
   its saved categorical colours; reconstruct only when no explicit source exists
   and record the reconstruction rule. Missing, duplicate or inconsistent entries
   fail rather than silently recolouring. Shared biological labels can share a

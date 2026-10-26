@@ -205,8 +205,14 @@ re-standardize group means or treat this as donor-level inference. See
 [publication figures](references/publication-figures.md) for the exact contract.
 
 For plot-only requests, preserve source H5ADs, saved coordinates, scientific
-parameters and annotation revisions. Freeze category order/palette, verify source
-hashes and export a new figure revision. Read
+parameters and annotation revisions. Record the requested display order/palette and verify source
+hashes. Pure appearance changes may overwrite the existing requested figures
+directly, without another approval or a mandatory revision directory. This
+includes typography, legend grouping/order, wrapping, spacing, colours and
+display-only point styling; preserve scientific values and identities. Refresh
+affected manifests, artifact identities, visual review and index links after
+replacement. Data, cell membership, annotation meaning or analysis changes need
+a new result revision. Read
 [publication figures](references/publication-figures.md) for expression scales,
 composition denominators, DMR missingness/normalization and visual acceptance.
 

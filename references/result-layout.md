@@ -51,6 +51,11 @@ ad hoc spelling (`methylvi` is canonical).
   `plan_workflow.py` or `plan_custom_workflow.py --category ...` directly instead
   of reserving the same ID first. A retry reads its original manifest/plan.
 
+Pure appearance edits may replace existing figures in place; they do not require
+a new run or publication revision. Preserve scientific data and update affected
+manifests, checksums, previews, visual review and index links. See
+[publication figures](publication-figures.md) for this replacement policy.
+
 Within a run, group artifacts by function (`tables/`, `models/`, `reports/`,
 `publication/<revision>/`) or parameter branches. Existing native stage layouts
 can remain. Do not create empty subdirectories just to satisfy a template. A
