@@ -1,10 +1,11 @@
 # Batch comparison delivery
 
-For single-line cell-type names, set `analysis.figures_comparison.legend_single_line: true`
+Single-line cell-type names are the default: `analysis.figures_comparison.legend_single_line: true`
 before standard planning (or `legend_single_line: true` in the custom comparison
 task parameters). Atlas and individual panels preserve
 source category order and use unwrapped legend labels; legends still must fit
-the canvas. The shared helper also accepts `save_embedding(..., wrap_legend=False)`.
+the canvas. The shared helper defaults to `save_embedding(..., wrap_legend=False)`.
+Explicit user-requested wrapping remains available via the boolean setting.
 
 New plans enable `analysis.figures_comparison.enabled: true`. The DAG is analysis tasks → `figures_comparison` → final `workflow_summary`. Set the boolean to false before planning to retain the previous DAG. Do not add the task to a frozen or active plan.
 

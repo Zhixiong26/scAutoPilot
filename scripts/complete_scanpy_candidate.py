@@ -30,6 +30,22 @@ def align_proposals(obs, table, placeholders):
     return table
 
 
+def validate_marker_panels(settings, available):
+    """Fail before writing outputs instead of silently dropping missing markers."""
+    count = settings.get('markers_per_annotation', 3)
+    if type(count) is not int or count < 1:
+        raise ValueError('markers_per_annotation must be a positive integer')
+    if count != 3 and not str(settings.get('marker_count_reason', '')).strip():
+        raise ValueError('A nondefault marker count requires marker_count_reason')
+    available = set(available)
+    for label, genes in settings['dotplot_markers'].items():
+        if len(genes) != len(set(genes)) or len(genes) != count:
+            raise ValueError('Expected %d distinct markers for %s' % (count, label))
+        missing = [g for g in genes if g not in available]
+        if missing:
+            raise ValueError('Markers missing from full-gene RNA for %s: %s' % (label, missing))
+
+
 def complete(project, source_run, reference_dir, panels_path, output, task_dir):
     from _common import host_role, sha256_file, write_json
     from figures_comparison_evidence import task_evidence
@@ -80,6 +96,7 @@ def complete(project, source_run, reference_dir, panels_path, output, task_dir):
     order = settings['cell_type_order']; palette = settings['palette']; panels = settings['dotplot_markers']
     if len(order) != len(set(order)) or set(order) != set(table.cell_type) or set(order) != set(panels) or len(order) != len(palette):
         raise ValueError('Panel, label, order and palette mismatch')
+    validate_marker_panels(settings, a.raw.var_names if a.raw is not None else [])
     out = Path(output)
     if out.exists() and any(out.iterdir()):
         raise ValueError('Choose a new output revision')
@@ -104,9 +121,6 @@ def complete(project, source_run, reference_dir, panels_path, output, task_dir):
     a.obs.to_csv(out / 'cell_annotations.tsv', sep='\t', index_label='cell_id')
     table.reset_index().drop_duplicates('leiden').to_csv(out / 'cluster_proposals.tsv', sep='\t', index=False)
     missing = {label: [g for g in genes if g not in a.raw.var_names] for label, genes in panels.items()}
-    panels = {label: [g for g in genes if g in a.raw.var_names] for label, genes in panels.items()}
-    if any(not genes for genes in panels.values()):
-        raise ValueError('A marker group has no genes in raw expression')
     dot = sc.pl.dotplot(a, panels, groupby='candidate_cell_type', use_raw=True,
         categories_order=order, expression_cutoff=0, standard_scale=None,
         title=None, return_fig=True,
@@ -128,7 +142,7 @@ def complete(project, source_run, reference_dir, panels_path, output, task_dir):
     if sha256_file(source) != source_hash:
         raise ValueError('Source changed during completion')
     write_json(out / 'candidate_delivery.json', dict(
-        figure_format_policy='png_only',
+        figure_format_policy='png_only', markers_per_annotation=settings.get('markers_per_annotation', 3),
         source_h5ad=str(source), source_sha256=source_hash, source_run=source_run,
         analysis_signature=summary['analysis_signature'], cells=a.n_obs,
         clusters=int(a.obs.leiden.nunique()), placeholder_cells=0,

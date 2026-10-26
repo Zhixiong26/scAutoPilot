@@ -358,7 +358,7 @@ def build_specs(root, plan, spec, source):
                 groups.setdefault(group.replace('_ordinary', '_supervised'), []).append(weighted)
         if rows:
             for panel in rows:
-                panel['legend_single_line'] = bool(spec.get('legend_single_line', False))
+                panel['legend_single_line'] = bool(spec.get('legend_single_line', True))
             groups.setdefault(group, []).append(rows)
     source.context = None
     for route in ROUTES:

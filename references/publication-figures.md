@@ -48,13 +48,21 @@ AnnData presentation metadata should use parallel `*_display_order` and
 `*_display_palette` arrays, not label-keyed nested dictionaries: labels such as
 `T/NK` must not become HDF5 path components.
 
+## RNA main figure
+
+For full RNA delivery use the [integrated overview contract](rna-overview.md),
+including its three-marker rule and executable audit. Narrow figure-only requests
+retain their requested scope; they do not require an unrelated full analysis.
+
 ## Panel requirements
 
 - **Embeddings:** use `embedding_plot.save_embedding()` for 8 × 8 inch,
   300 dpi individual PNGs only. Axes must be square
   with isotropic data units, preserving the point cloud's natural shape. Check
   both axes geometry and equal horizontal/vertical unit scale; a square canvas
-  alone is insufficient. Keep categorical legends single-column and numerical
+  alone is insufficient. Group related subtypes by the recorded biological hierarchy and keep each
+  categorical label on one line; enlarge the legend allocation or canvas rather
+  than breaking a name. Keep categorical legends single-column and numerical
   bars outside each panel. Atlas canvases may be rectangular with square panels.
 - **Colours:** when the user requests a presentation change, apply the requested
   display order/palette and record it consistently across the affected views;
@@ -71,7 +79,9 @@ AnnData presentation metadata should use parallel `*_display_order` and
 - **Marker dotplots:** use the recorded expression layer (normally full-gene
   log-normalized `raw`). State whether colour is mean expression or gene-wise
   scaled mean; state the expression cutoff for the fraction/size legend. Align
-  row order and marker groups to the selected annotation revision. Export the
+  row order and marker groups to the selected annotation revision. Use three
+  evidence-supported, distinct genes per annotation by default (see the RNA
+  contract for missing evidence and shared genes). Export the
   mean/fraction table. Do not force dotplots square or use clipped marker labels.
 - **Composition:** export counts and fractions by sample/condition, recording
   denominators and sample counts. Fractions normalized within different

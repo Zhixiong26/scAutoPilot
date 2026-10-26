@@ -943,6 +943,7 @@ class SkillTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             project = self.generate(Path(temp), "rna")
             self.assertTrue((project / "tools/audit_delivery.py").is_file())
+            self.assertTrue((project / "tools/audit_rna_overview.py").is_file())
             self.assertIn("audit_delivery.py", (project / "AGENTS.md").read_text())
             self.assertFalse(any(path.name == "__pycache__" for path in project.rglob("__pycache__")))
             self.assertFalse(any(project.rglob("*.pyc")))

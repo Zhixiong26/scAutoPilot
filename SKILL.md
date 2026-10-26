@@ -187,6 +187,14 @@ optimize circular label agreement, disease mixing, DMR significance or plot beau
 
 ## Figure delivery
 
+For a full RNA handoff, follow the [RNA overview contract](references/rna-overview.md):
+one integrated A–K main PNG, three evidence-supported markers per displayed
+annotation, grouped single-line legends, source tables and hash-bound visual
+review. Use `audit_rna_overview.py` and bind the overview into `audit_delivery.py`.
+A complete candidate is delivered FOR REVIEW without waiting for biological
+approval. Label level (major type, subtype, state) is explicit; changing it is an
+annotation revision, not a PCA/layout correction.
+
 Generate one final PNG per figure. Do not generate PDF/SVG versions, separate
 review/preview PNGs, thumbnails or preview-only contact sheets. Inspect the final
 PNGs directly; source tables, manifests and visual-review records remain required.

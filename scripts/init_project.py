@@ -32,7 +32,7 @@ RUNTIME_TOOLS = (
     "submit_workflow.py", "inspect_run.py", "update_report.py", "record_annotation_review.py", "link_data.py",
     "review_scanpy_iteration.py", "apply_scanpy_round.py", "system_one_adapter_runner.py",
     "visual_vlm_runner.py",
-    "figures_comparison_evidence.py", "record_figure_review.py", "audit_delivery.py",
+    "figures_comparison_evidence.py", "record_figure_review.py", "audit_delivery.py", "audit_rna_overview.py",
     "prepare_scanpy_candidate_reference.py", "complete_scanpy_candidate.py",
     "optimization_state.py",
     "run_methylation_iteration.py",
@@ -57,7 +57,7 @@ HG38_GENOME_IDS = frozenset({"grch38", "hg38", "grch38.p14"})
 HUMAN_ORGANISMS = frozenset({"human", "homo sapiens"})
 
 DEFAULT_ANALYSIS = {
-    "figures_comparison": {"enabled": True},
+    "figures_comparison": {"enabled": True, "legend_single_line": True},
     # Every value mirrors the authoritative workflow notebook
     # (Scripts/Scanpy/Notebooks/scanpy_workflow.ipynb); the notebook documents each step.
     "scanpy": {

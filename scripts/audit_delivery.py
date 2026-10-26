@@ -11,7 +11,7 @@ from _common import write_json
 from figures_comparison_evidence import ROUTES, read_json, sha, task_evidence, validate_manifest, review_state, required_review_images
 
 
-def audit(project, run_id, routes, source_runs=(), annotation_run=None, required=()):
+def audit(project, run_id, routes, source_runs=(), annotation_run=None, required=(), overview_manifests=()):
     root = Path(project).resolve()
     checks, plans = [], {}
 
@@ -132,6 +132,25 @@ def audit(project, run_id, routes, source_runs=(), annotation_run=None, required
         return {'path': str(path), 'sha256': sha(path)}
     for name in required:
         check('required:' + str(name), lambda name=name: artifact(name))
+    def overview_requirements():
+        configured = []
+        settings = root / 'config/figure_delivery.json'
+        if 'scanpy' in routes and settings.exists():
+            configured = read_json(settings)['rna_overview_manifests']
+            require(isinstance(configured, list) and bool(configured), 'empty RNA overview requirements')
+        names = list(overview_manifests) + configured
+        require(all(isinstance(x, (str, Path)) and str(x).strip() for x in names), 'invalid overview manifest path')
+        return list(dict.fromkeys(str(x) for x in names))
+    overviews = check('overview_requirements', overview_requirements)
+    for name in overviews or []:
+        def overview(name=name):
+            from audit_rna_overview import validate_overview
+            path = Path(name)
+            path = (path if path.is_absolute() else root / path).resolve()
+            require(any(Path(plan['result_dir']).resolve() == path.parent for plan in plans.values()),
+                    'overview producer must be a declared, evidence-valid --source-run')
+            return validate_overview(path)
+        check('rna_overview:' + name, overview)
     check('results_index', lambda: artifact('Results/RESULTS_INDEX.md'))
     failures = [x for x in checks if x['status'] == 'failed']
     return {'schema_version': 1, 'scope': 'full_analysis_delivery', 'run_id': run_id,
@@ -148,9 +167,10 @@ def main():
     parser.add_argument('--source-run', action='append', default=[])
     parser.add_argument('--annotation-run')
     parser.add_argument('--require', action='append', default=[], help='Additional user-requested files; repeatable')
+    parser.add_argument('--overview-manifest', action='append', default=[], help='A–K RNA overview manifest; repeatable')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
-    report = audit(args.project, args.run_id, args.routes, args.source_run, args.annotation_run, args.require)
+    report = audit(args.project, args.run_id, args.routes, args.source_run, args.annotation_run, args.require, args.overview_manifest)
     write_json(args.output, report)
     print(report['status'] + ': ' + ', '.join(report['failed_checks']))
     return 0 if report['status'] == 'complete' else 1

@@ -10,11 +10,22 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from complete_scanpy_candidate import align_proposals
+from complete_scanpy_candidate import align_proposals, validate_marker_panels
 from init_project import RUNTIME_TOOLS
 
 
 class CompletionTests(unittest.TestCase):
+    def test_markers_are_not_silently_dropped_or_duplicated(self):
+        valid = {'dotplot_markers': {'Type A': ['G1', 'G2', 'G3']}}
+        validate_marker_panels(valid, ['G1', 'G2', 'G3'])
+        for genes, available in [(['G1', 'G2'], ['G1', 'G2']),
+                                  (['G1', 'G2', 'G2'], ['G1', 'G2']),
+                                  (['G1', 'G2', 'G3'], ['G1', 'G2'])]:
+            with self.assertRaises(ValueError):
+                validate_marker_panels({'dotplot_markers': {'Type A': genes}}, available)
+        validate_marker_panels({'dotplot_markers': {'Type A': ['G1', 'G2']},
+                                'markers_per_annotation': 2, 'marker_count_reason': 'explicit user request'}, ['G1', 'G2'])
+
     def test_exact_cells_and_clusters_with_shuffled_reference(self):
         obs = pd.DataFrame({'leiden': ['0', '1']}, index=['a', 'b'])
         table = pd.DataFrame({'leiden': ['1', '0'], 'cell_type': ['B cells', 'T cells'],

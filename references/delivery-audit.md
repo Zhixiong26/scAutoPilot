@@ -16,6 +16,13 @@ For a single standard run, omit `--source-run` and `--annotation-run`. Repeat
 binding supports `complete_scanpy_candidate.py`'s derived delivery contract.
 Repeat `--require` for every additional promised file (complete notebook, marker
 tables, dotplots, reports, etc.); the checker cannot infer promises from chat.
+For full RNA handoff also pass `--overview-manifest` for the integrated A–K
+main figure, or register it in project `config/figure_delivery.json` under
+`rna_overview_manifests`. The checker then automatically applies the
+[RNA overview contract](rna-overview.md), including three markers per annotation,
+source-table arithmetic, PNG inventory and a fresh main-figure visual review.
+`--require` alone checks file existence/hash, not this content contract. Historical
+deliveries without a registered overview remain auditable under their old scope.
 
 The gate verifies signed task evidence and recorded outputs for all named runs,
 formal `figures_comparison` and dependent `workflow_summary`, requested route

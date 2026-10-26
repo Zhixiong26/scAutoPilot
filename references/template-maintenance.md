@@ -1,5 +1,18 @@
 # Template maintenance
 
+Version 0.16.5 fixes the RNA main-figure contract: integrated A–K overview,
+three markers per displayed annotation, explicit annotation level/state semantics,
+and single-line legends by default. New `audit_rna_overview.py` checks the exported
+manifest, source tables, PNG inventory and hash-bound visual review;
+`audit_delivery.py` accepts `--overview-manifest` and project-local
+`config/figure_delivery.json` requirements. This validates an agent-authored
+overview adapter; it does not add an automatic A–K rendering DAG or infer marker
+biology. Existing comparison and candidate completion routes remain necessary.
+The generator distributes the checker. Upgrade idle executors only; runtime
+signatures change and subsequent work needs fresh validation/plans. Preserve
+legacy deliveries and reviews. No labels, analyses or historical outputs change
+during this upgrade.
+
 Version 0.16.4 makes all figure deliveries PNG-only: one final PNG per figure,
 no PDF/SVG, duplicate preview/review images or preview-only contact sheets.
 Built-in atlas, embedding, candidate marker and methylation QC producers follow

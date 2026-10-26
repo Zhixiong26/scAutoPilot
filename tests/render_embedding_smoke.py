@@ -70,8 +70,6 @@ def main():
                    legend_loc="right margin", frameon=False)
         namespace["square_panels"](axes)
         check(figure, "umap_%s.png" % key)
-        if key == "candidate_cell_type":
-            save_embedding(figure, args.output / "umap_candidate_cell_type.pdf")
         plt.close(figure)
 
     figure, axes = namespace["embedding_figure"](npanels=2)

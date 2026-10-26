@@ -21,6 +21,17 @@ Update `Results/RESULTS_INDEX.md` with verified paths, parameters and status.
 
 ## Figure contract, including exploration
 
+Full RNA handoff includes an integrated A–K main PNG: cell types, Leiden, samples,
+condition, confidence and three QC views; composition by condition/sample; and
+a marker dotplot. Use three evidence-supported genes per displayed annotation,
+export their mapping and mean/fraction tables, group related subtypes and keep
+each name on one line. Record the annotation level; major-type merging is an
+explicit annotation revision and state markers do not establish lineage.
+Missing panels or insufficient marker evidence must be reported, never padded
+with invented values. See the skill `references/rna-overview.md`. Bind the main
+manifest using `audit_delivery.py --overview-manifest` or project
+`config/figure_delivery.json`; a three-UMAP atlas alone is not the full RNA handoff.
+
 Read the project-local scautopilot `references/publication-figures.md` and
 `references/result-layout.md` when available. These requirements also apply when
 the skill was not explicitly invoked:

@@ -28,7 +28,7 @@ class EmbeddingExportTests(unittest.TestCase):
         label = 'Aerocyte capillary endothelial'
         ax.scatter([0, 1], [0, 1], label=label)
         ax.legend()
-        self.helper.standardize_embedding(figure, wrap_legend=False)
+        self.helper.standardize_embedding(figure)
         self.assertEqual(ax.get_legend().get_texts()[0].get_text(), label)
         self.check_legend(figure, ax)
 
@@ -63,8 +63,9 @@ class EmbeddingExportTests(unittest.TestCase):
             self.helper.save_embedding(figure, path)
             self.assertEqual(mpimg.imread(path).shape[:2], (2400, 2400))
             pdf = Path(temp) / "umap.pdf"
-            self.helper.save_embedding(figure, pdf)
-            self.assertRegex(pdf.read_bytes(), rb"/MediaBox\s*\[\s*0\s+0\s+576\s+576\s*\]")
+            with self.assertRaisesRegex(ValueError, 'PNG only'):
+                self.helper.save_embedding(figure, pdf)
+            self.assertFalse(pdf.exists())
         self.check_square(figure, [ax])
         self.assertAlmostEqual(ax.get_window_extent().width / figure.dpi, 4)
         self.check_legend(figure, ax)

@@ -38,6 +38,18 @@ def complete(root):
 
 
 class DeliveryAuditTests(unittest.TestCase):
+    def test_project_overview_requirement_cannot_be_silently_omitted(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); complete(root)
+            write_json(root / 'config/figure_delivery.json', {'rna_overview_manifests': ['missing.json']})
+            report = audit(root, 'test', ['scanpy'])
+            self.assertIn('rna_overview:missing.json', report['failed_checks'])
+
+    def test_new_plans_default_to_single_line_legends(self):
+        from plan_workflow import make_tasks
+        tasks = make_tasks({'scanpy': True}, {})
+        self.assertTrue(next(x for x in tasks if x['id'] == 'figures_comparison')['parameters']['legend_single_line'])
+
     def test_planner_propagates_single_line_setting(self):
         from plan_workflow import make_tasks
         tasks = make_tasks({'scanpy': True}, {'figures_comparison': {'legend_single_line': True}})
