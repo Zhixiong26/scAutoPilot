@@ -17,6 +17,7 @@ from _common import (HOST_ROLE_SUBMIT, LOGIN_EXECUTION_VARIABLE, WorkflowError, 
                      normalize_job_state, task_is_implemented, validate_recorded_outputs, write_json)
 from inspect_resources import inspect
 from validate_project import validate
+from result_paths import validate_plan_result
 
 
 def load_plan(project: Path, run_id: str) -> tuple[Path, dict]:
@@ -24,7 +25,9 @@ def load_plan(project: Path, run_id: str) -> tuple[Path, dict]:
     path = run_dir / "plan.json"
     if not path.is_file():
         raise WorkflowError("plan does not exist: %s" % path)
-    return run_dir, json.loads(path.read_text(encoding="utf-8"))
+    plan = json.loads(path.read_text(encoding="utf-8"))
+    validate_plan_result(project, plan)
+    return run_dir, plan
 
 
 def environment_python(project: Path, stage: str = "orchestrator") -> str:

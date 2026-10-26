@@ -20,9 +20,11 @@ def audit(project):
                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)}
     except (OSError, SyntaxError) as exc:
         errors.append('Cannot inspect deployed executor: %s' % exc)
-    for name in ('runtime_identity', 'seal_recorded_outputs', 'update_results_index'):
+    for name in ('runtime_identity', 'seal_recorded_outputs', 'update_results_index', 'validate_plan_result'):
         if name not in calls:
             errors.append('Deployed run_task.py lacks %s; freeze a maintained runtime in a NEW run' % name)
+    if not (root / 'tools/result_paths.py').is_file():
+        errors.append('Categorized result_paths.py is missing; freeze a maintained runtime')
     if not (root / 'Scripts/Common/embedding_plot.py').is_file():
         errors.append('Shared embedding_plot.py is missing')
     # Inspect explicit adapters as well as the common runner: a maintained

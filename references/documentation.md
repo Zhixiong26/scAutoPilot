@@ -15,9 +15,13 @@ Keep dynamic state under `.workflow/runs/<run-id>/`. A stage is complete only wh
 
 Never rewrite the root README with runtime state: it is frozen after generation, because a document that reports progress stops being trustworthy as a description of what the project is. The same rule governs the stage READMEs and the prose above every stage run log. Runtime facts belong in the run-log regions. `update_report.py` rebuilds the root log and every stage log, and `inspect_run.py` refreshes the inspected run's record in both as a side effect of computing the run's verdict.
 
-Documentation writes never change a run's verdict. The exit code of `inspect_run.py` encodes the state of the run, not of a derived markdown file, so an unwritable Report is reported on stderr with the recovery command and leaves the exit code alone; `update_report.py` is the loud path and does exit non-zero. Analysis artifacts remain under the corresponding `Results/runs/<run-id>/` root.
+Documentation writes never change a run's verdict. The exit code of `inspect_run.py` encodes the state of the run, not of a derived markdown file, so an unwritable Report is reported on stderr with the recovery command and leaves the exit code alone; `update_report.py` is the loud path and does exit non-zero. Analysis artifacts remain under the corresponding `Results/runs/<category>/<run-id>/` root.
 
 Environment discovery, creation, verification, and failures are recorded under `.workflow/environment-bootstrap/` and summarized in `Scripts/Environment/Report.md`. Never report a profile as ready from package installation alone; its profile verification command must pass.
+
+New run paths follow [result layout](result-layout.md). The signed plan is the
+authority for `result_dir` and category; never infer a path from a run-name prefix.
+Legacy plans keep their original recorded roots.
 
 ## Run log format
 

@@ -13,6 +13,10 @@ compatibility promises. Package benchmark numbers are not local measurements.
 | vmrseq `0.99.5.9000` CPU | `run_vmrseq_cpu.R` on one pooled chromosome | R >=4.5, DESCRIPTION dependencies, OpenMP C compiler; separate VMR method, not a MethSCAn drop-in. |
 | vmrseq GPU runtime | `pipeline_gpu.py` via `run_accelerated.py` | CUDA PyTorch, NumPy, h5py, gcc/OpenMP, R + accelerated vmrseq. Require explicit chromosomes and matching input representation. |
 
+For a requested performance/correctness study, use [methylome benchmark design](methylome-benchmark.md).
+The standalone adapters do not themselves implement full-cohort paired timing,
+logical output comparison, replication or downstream scientific equivalence.
+
 ## Stage and verify
 
 Find the actual source directory before using it. Unicode format characters can
@@ -79,7 +83,12 @@ new plan. Do not modify running projects, frozen executors or old plan identity.
 The native optimized CLI defaults to CPU and retains prepare/filter/smooth/scan/
 diff/matrix stages. Run a small same-input comparison before production; record
 scientific parameters, cell/site order, region boundaries, count matrices and
-numerical differences. Installation success does not establish equivalence.
+numerical differences. Installation success does not establish equivalence. Inspect actual smooth outputs:
+some opt5 CPU CLI builds also default to compact NPZ instead of CSV. Preserve
+native output/timing boundaries and compare coordinates, missingness and values
+across representations; explicitly request CSV only when a consumer needs it.
+Do not mistake serialization differences for scientific differences, or silently
+ignore boundary missingness changes.
 
 GPU is an explicit standalone invocation in this release:
 

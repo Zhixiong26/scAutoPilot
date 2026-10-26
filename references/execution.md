@@ -1,6 +1,6 @@
 # Scheduler and execution
 
-`plan_workflow.py` writes a closed DAG under `.workflow/runs/<run-id>/`; writable analysis outputs go to `Results/runs/<run-id>/`. `submit_workflow.py` revalidates signatures, requires matching full validation, and resumes only incomplete tasks.
+`plan_workflow.py` writes a closed DAG under `.workflow/runs/<run-id>/`; writable analysis outputs go to `Results/runs/<category>/<run-id>/`. `submit_workflow.py` revalidates signatures, requires matching full validation, and resumes only incomplete tasks.
 
 Run `audit_runtime.py --project PROJECT` before copying a legacy executor. New
 planner/submission entrypoints refuse missing completion-index or artifact/runtime
@@ -84,7 +84,7 @@ Provisioning and integrity work is not a planned task and is not covered by the 
 A full ALLC validation is the exception to that, because reading a terabyte of ALLC files is not login-node work. It enumerates the files, splits them into byte-balanced chunks, submits one chunk job per chunk, waits, and merges the results; the reading happens on compute nodes. Enumeration, submission, and merging stay on the submitting host, which is the login-node work the rules already allow. The merge is fail-closed: a chunk that is missing, unreadable, built from a different manifest, or that does not account for exactly the files it was handed makes the whole validation invalid and names the chunk, so a partial read can never pass as a complete one. Chunk results whose manifest still matches are reused instead of resubmitted, so a failed chunk does not cost the whole read. Where there is nothing to submit to, or the project is small, the same check runs in place through a process pool. `--skip-full-validation` on `submit_workflow.py` submits without that evidence when none is on disk, records `full_validation_skipped: true` on the plan and on every task record, and writes no evidence file; evidence already on disk and matching the input signature is used either way. `inspect_run.py` reports the evidence state and the ALLC counts beside the verdict, because a full validation of a project whose selected routes include no methylation reads no ALLC file at all and would otherwise look the same as one that read all of them. See [configuration](configuration.md) for the knobs.
 
 For an explicit custom adapter use `plan_custom_workflow.py --project PROJECT
---spec PROJECT/config/custom_tasks.json --run-id RUN`, then ordinary
+--spec PROJECT/config/custom_tasks.json --run-id RUN --category CATEGORY`, then ordinary
 `submit_workflow.py`. The JSON list uses `task()` fields (`name`, `profile`,
 `dependencies`, `parameters`, `environment`, optional `outputs`). Commands must
 be implemented through `analysis.task_commands`; resource profiles must exist.

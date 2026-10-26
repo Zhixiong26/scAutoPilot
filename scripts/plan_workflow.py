@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from _common import WorkflowError, git_commit, load_project, task_is_implemented, write_json, runtime_identity
 from validate_project import validate
+from result_paths import infer_category, require_unused_result, validate_output_commands, validate_run_id
 
 
 def task(name: str, profile: str, dependencies: List[str] | None = None,
@@ -191,6 +192,7 @@ def plan(project: Path, routes_option: str, run_id: str) -> dict:
     require_contract(project)
     if not run_id.strip() or "/" in run_id or run_id in {".", ".."}:
         raise WorkflowError("run-id must be a non-empty path-safe name")
+    validate_run_id(run_id)
     cfg = load_project(project)
     if routes_option == "auto":
         preflight = validate(project)
@@ -228,6 +230,9 @@ def plan(project: Path, routes_option: str, run_id: str) -> dict:
     if missing:
         raise WorkflowError("workflow contains tasks without an implementation: %s" % ", ".join(missing))
     root = Path(project).resolve()
+    category = infer_category(selected, cfg["analysis"])
+    result_dir = require_unused_result(root, run_id, category)
+    validate_output_commands(commands)
     for item in tasks:
         if item['id'].startswith('methylation_iter_'):
             from scautopilot.review.methylation import source_evidence
@@ -245,7 +250,8 @@ def plan(project: Path, routes_option: str, run_id: str) -> dict:
         "code_signature": preflight.get("code_signature"),
         "runtime_identity": runtime_identity(root), "plan_identity_version": 2,
         "git_commit": git_commit(root), "template_lock": template_lock,
-        "result_dir": str(root / "Results" / "runs" / run_id), "tasks": tasks,
+        "result_layout_version": 2, "result_category": category,
+        "result_dir": str(result_dir), "tasks": tasks,
     }
     write_json(run_dir / "preflight.json", preflight)
     write_json(run_dir / "plan.json", payload)

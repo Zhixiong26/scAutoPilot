@@ -2,7 +2,7 @@
 
 New plans enable `analysis.figures_comparison.enabled: true`. The DAG is analysis tasks → `figures_comparison` → final `workflow_summary`. Set the boolean to false before planning to retain the previous DAG. Do not add the task to a frozen or active plan.
 
-All selected routes, including prerequisites, appear in `Results/runs/<run-id>/figures_comparison/route_coverage.tsv`:
+All selected routes, including prerequisites, appear in `Results/runs/<category>/<run-id>/figures_comparison/route_coverage.tsv`:
 
 | Route | Existing data used |
 |---|---|

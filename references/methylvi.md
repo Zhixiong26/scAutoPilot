@@ -44,3 +44,11 @@ For optional official Optuna capacity proposals and external method readiness,
 read [literature-backed methods](published-methods.md). Optuna proposes; signed
 DAG tasks train; comparable validation losses screen; stability/biological review
 selects. scvi autotune/ASHA and donor-held-out training are not implicitly enabled.
+
+## Broader methylome study handoff
+
+Read [methylome atlas](methylome-atlas.md) when connecting fixed-bin/VMR models,
+gene-body annotation, RNA evidence and downstream DMRs. A selected MethylVI model
+or weighted UMAP is not a subject-level disease test. Preserve raw M/C layers
+for [within-type disease and same-cell analyses](methylome-disease.md), and keep
+transferred-label evidence distinct from independent methylome annotation.

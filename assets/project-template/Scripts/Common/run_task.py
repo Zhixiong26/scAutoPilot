@@ -19,6 +19,9 @@ from _common import (WorkflowError, host_role, host_role_source, load_project, l
                      runtime_identity, seal_recorded_outputs, update_results_index)  # noqa: E402
 
 
+from result_paths import validate_plan_result
+
+
 def render_command(command, variables):
     tokens = shlex.split(command) if isinstance(command, str) else list(command)
     return [str(token).format(**variables) for token in tokens]
@@ -93,6 +96,7 @@ def main() -> int:
     root = args.project.resolve()
     run_dir = root / ".workflow" / "runs" / args.run_id
     plan = json.loads((run_dir / "plan.json").read_text(encoding="utf-8"))
+    validate_plan_result(root, plan)
     matches = [item for item in plan["tasks"] if item["id"] == args.task]
     if len(matches) != 1:
         raise WorkflowError("task is not uniquely defined in plan: %s" % args.task)

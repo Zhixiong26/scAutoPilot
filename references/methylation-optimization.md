@@ -173,7 +173,7 @@ ARI and **per-cluster** best Jaccard. An unstable winner, skipped confirmation o
 incomplete baseline retains the source and requires review. Stability thresholds
 are configurable screening rules, not p-values.
 
-`Results/runs/<run>/methylation_iteration/<id>/` contains source evidence/spec,
+`Results/runs/<category>/<run>/methylation_iteration/<id>/` contains source evidence/spec,
 per-round metrics/coordinates, candidate comparison, seed confirmation, diagnostics,
 cluster-by-sample/label tables, a representation-only selected H5AD (not full
 counts), selection summary, figure comparison and checksum manifest. Computational

@@ -17,15 +17,15 @@ class RuntimeDeliveryContracts(unittest.TestCase):
             root = test_core.SkillTests().generate(Path(temp), 'rna')
             spec = root / 'config/custom_tasks.json'
             spec.write_text(json.dumps([{'name':'workflow_summary','profile':'summary'}]))
-            result = plan_custom(root, spec, 'custom')
+            result = plan_custom(root, spec, 'custom', 'scanpy')
             self.assertEqual(result['plan_identity_version'], 2)
             self.assertTrue(result['runtime_identity'])
             self.assertEqual(result['tasks'][0]['outputs'], ['{task_dir}/task_outputs.json'])
             with self.assertRaisesRegex(WorkflowError, 'Preserve existing'):
-                plan_custom(root, spec, 'custom')
+                plan_custom(root, spec, 'custom', 'scanpy')
             external = Path(temp) / 'tasks.json'; external.write_text(spec.read_text())
             with self.assertRaisesRegex(WorkflowError, 'frozen under'):
-                plan_custom(root, external, 'external')
+                plan_custom(root, external, 'external', 'scanpy')
 
     def test_legacy_executor_is_rejected_without_mutation(self):
         with tempfile.TemporaryDirectory() as temp:

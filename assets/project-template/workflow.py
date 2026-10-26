@@ -9,6 +9,7 @@ from pathlib import Path
 
 
 TOOLS = {
+    "reserve-results": "reserve_results.py",
     "audit": "audit_runtime.py", "plan-custom": "plan_custom_workflow.py",
     "bootstrap": "bootstrap_environments.py", "validate": "validate_project.py", "plan": "plan_workflow.py",
     "resources": "inspect_resources.py", "submit": "submit_workflow.py",

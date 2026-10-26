@@ -204,6 +204,7 @@ def inspect(project: Path, run_id: str) -> dict:
     full_validation = full_validation_record(Path(project), plan)
     result = {
         "schema_version": 1, "run_id": run_id, "status": status,
+        "result_dir": plan.get("result_dir"), "result_category": plan.get("result_category"),
         "checked_at": datetime.now(timezone.utc).isoformat(), "tasks": task_rows,
         "input_signature": plan.get("input_signature"),
         "login_execution_tasks": login_tasks,
@@ -220,6 +221,7 @@ def inspect(project: Path, run_id: str) -> dict:
                                             else "failed" if delivery["state"] in TERMINAL_BAD
                                             or delivery["complete_marker"] else "pending")
         manifest = Path(plan["result_dir"]) / "figures_comparison/delivery_manifest.json"
+        result["figure_manifest"] = str(manifest)
         result["visual_review_status"] = "pending"
         if delivery["evidence_valid"]:
             data = read_json(manifest)

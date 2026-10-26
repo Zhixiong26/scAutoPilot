@@ -1,5 +1,9 @@
 # Single-cell Multiomics Analysis
 
+0.16.0：新结果按 `Results/runs/<category>/<run-id>/` 自动分类；自定义 DAG 显式选择大类，探索任务共用路径工具。项目级 AGENTS.md 统一正式与探索绘图规范。此次含运行时代码变更，需新执行器和重新验证；历史路径及活动运行不迁移。详见[结果目录与绘图约定](references/result-layout.md)。
+
+0.15.5：整理 methylome 通用分析协议：[图谱与双模态对接](references/methylome-atlas.md)、[共享 marker 分层筛选/展示](references/methylome-markers.md)、[受试者层面疾病与同细胞关联](references/methylome-disease.md)、[四实现 benchmark](references/methylome-benchmark.md)。这是按需读取的分析与验收规范；未新增自动疾病模型或全规模 benchmark 执行器，不升级活动运行快照。
+
 0.15.4：增加旧运行器启动检查、已有产物输入校验、标准 UMAP 重绘工具；调度直接使用符合条件的允许分区，总索引按运行聚合。历史运行不自动升级。
 
 A portable Codex skill for configuration-driven single-cell RNA and DNA-methylation analysis with Scanpy/Harmony, MethSCAn, ALLCools, and MethylVI.
@@ -291,7 +295,7 @@ Scanpy、MethSCAn、ALLCools 和 MethylVI 均有内置执行适配器，并自�
 
 单机模式（`standalone`）下 `local` 后端仍可用：使用同一个 DAG，资源为档位目标值按 `scheduler.local.max_threads`、`max_memory` 收紧后的结果，并受并发设置限制。
 
-所有正式结果写入 `PROJECT/Results/runs/<run_id>/`。同一 run 中断后可再次执行 submit：已完成或仍在调度器中的任务不会重复提交，失败或产物缺失的任务会按依赖恢复。
+所有正式结果写入 `PROJECT/Results/runs/<category>/<run_id>/`。同一 run 中断后可再次执行 submit：已完成或仍在调度器中的任务不会重复提交，失败或产物缺失的任务会按依赖恢复。
 
 ### 8. 监控和更新报告
 
@@ -323,7 +327,7 @@ PROJECT/.workflow/runs/<run_id>/
 └── workflow.COMPLETE
 ```
 
-对应分析结果位于 `PROJECT/Results/runs/<run_id>/`，不同 run 不共享可写结果目录。
+对应分析结果位于 `PROJECT/Results/runs/<category>/<run_id>/`，不同 run 不共享可写结果目录。
 
 不能只根据作业已经提交或 Slurm 显示 `COMPLETED` 判断分析完成。任务输出、签名、机器可读 summary 和完成标记必须一致。
 
@@ -482,7 +486,7 @@ The bootstrapper reuses compatible environments read-only and creates missing pr
 
 Review the preflight report, DAG, and resource plans. Built-in adapters cover Scanpy, MethSCAn, ALLCools, and MethylVI and select the declared stage environment. Explicit route subsets validate only the input modalities, references, and environments used by their closed DAG. `analysis.task_commands` is an expert override, not a required setup step. A successful override must create `<task_dir>/task_outputs.json` with a non-empty `artifacts` array of existing absolute paths; child-process and wrapper-task return codes are recorded separately.
 
-To execute an approved run, repeat `submit_workflow.py` without `--dry-run`. Production submission requires matching full-validation evidence and creates it when absent. A full ALLC validation splits the files into byte-balanced chunks, submits one job per chunk to compute nodes — 8 in flight with 4 processes each by default — and merges them on the submitting host; below 32 ALLC files, or with nothing to submit to, it reads in place through a process pool. The merge is fail-closed: a missing chunk, a chunk result that does not match its manifest, or a chunk that accounts for fewer files than it was handed makes the whole validation invalid and names the chunk, and a chunk whose manifest is unchanged is reused rather than resubmitted. `--skip-full-validation` submits when no evidence is on disk and records `full_validation_skipped: true` on the plan and every task record, writing no evidence file. `inspect_run.py` reports the evidence state and the ALLC counts beside the verdict, so a project whose selected routes read no ALLC file cannot pass for a checked one. Each Slurm task receives a fresh resource query immediately before submission. Results are isolated under `Results/runs/<run_id>/`, and re-submission resumes incomplete work.
+To execute an approved run, repeat `submit_workflow.py` without `--dry-run`. Production submission requires matching full-validation evidence and creates it when absent. A full ALLC validation splits the files into byte-balanced chunks, submits one job per chunk to compute nodes — 8 in flight with 4 processes each by default — and merges them on the submitting host; below 32 ALLC files, or with nothing to submit to, it reads in place through a process pool. The merge is fail-closed: a missing chunk, a chunk result that does not match its manifest, or a chunk that accounts for fewer files than it was handed makes the whole validation invalid and names the chunk, and a chunk whose manifest is unchanged is reused rather than resubmitted. `--skip-full-validation` submits when no evidence is on disk and records `full_validation_skipped: true` on the plan and every task record, writing no evidence file. `inspect_run.py` reports the evidence state and the ALLC counts beside the verdict, so a project whose selected routes read no ALLC file cannot pass for a checked one. Each Slurm task receives a fresh resource query immediately before submission. Results are isolated under `Results/runs/<category>/<run_id>/`, and re-submission resumes incomplete work.
 
 **Long-running tasks never execute on a login node.** Every decision point resolves the same host role: `compute` inside a Slurm allocation (`SLURM_JOB_ID` is set), where the local executor is itself a compute node; `submit` when no allocation exists but `scontrol ping` reports a controller UP; `standalone` when neither holds, and there is nothing to submit to. On a submit host a project configured `backend: local` is submitted to Slurm rather than executed in place, `submissions.json` records that as `backend_declared` beside `backend_effective`, and each `task_status.json` records the role and `slurm_job_id` the task saw. `run_task.py`, `task_adapter.py`, and `Methylvi/*/run.sh` refuse before executing, and a refusal is a precondition failure: exit 2, no task evidence written. The login node validates, plans, submits, inspects, and reports — including the `sinfo`/`squeue` queries the resource check performs. To run work on the machine you are on, enter an allocation with `salloc` or `srun --pty bash` rather than granting an exemption.
 

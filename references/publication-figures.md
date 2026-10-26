@@ -1,7 +1,9 @@
 # Publication rendering and heatmap audit
 
-Use for final figure revisions, marker/composition panels and DMR heatmap
-diagnostics. The automated seven-route atlas remains governed by
+Use for all project plotting: final figures, exploratory candidates, temporary
+scripts/notebooks, parameter comparisons, marker/composition panels and DMR
+heatmap diagnostics. Explicit skill invocation is not required. Follow
+[result layout](result-layout.md) for both managed and standalone outputs. The automated seven-route atlas remains governed by
 [figures-comparison.md](figures-comparison.md); extra publication panels are
 separate derived deliveries and do not retroactively complete that DAG task.
 
@@ -135,3 +137,12 @@ Source palettes take precedence; a Scanpy default reconstruction is named as suc
 No clinical condition or new annotation is inferred. Review every preview and
 representative full-size categorical/numerical panels, then save a separate
 hash-bound review. Do not call a general preview readability pass a geometry pass.
+
+## Shared RNA–DNAm marker panels
+
+For cross-modality marker dotplots read [shared marker selection](methylome-markers.md).
+Keep discovery criteria, uniqueness, representative nomination and plotted-gene
+counts separate. Export gene–type support and both normalization formulas;
+a negative colour scale does not identify a method. Main shared-candidate panels
+and strict uniqueness supplements can coexist without changing the original tests.
+These panels are distinct from the four-view DMR heatmap contract above.

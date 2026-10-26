@@ -7,13 +7,17 @@ from pathlib import Path
 import re
 import shutil
 import sys
+from result_paths import require_unused_result
+from audit_runtime import require_contract
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--project', type=Path, required=True); p.add_argument('--spec', type=Path, required=True)
     p.add_argument('--run-id', required=True); p.add_argument('--partition'); p.add_argument('--smoke-test', type=Path)
     a=p.parse_args(); root=a.project.resolve(); run=a.run_id
+    require_contract(root)
     if not re.fullmatch(r'[a-z0-9][a-z0-9-]{1,90}', run): p.error('Invalid run ID')
+    result_dir = require_unused_result(root, run, 'methylation_qc')
     spec=json.loads(a.spec.read_text())
     # Relative source paths are anchored to the original specification, not its frozen copy.
     for key in ['metadata', 'palette']:
@@ -33,7 +37,7 @@ def main():
     cfg=json.loads((dest/'config/analysis.yaml').read_text())
     cfg['analysis']['task_commands']={'methylation_reads_qc':[
         '{python}','{project}/tools/run_methylation_reads_qc.py','--spec','{project}/config/methylation_reads_qc.json',
-        '--output','{project}/Results/runs/{run_id}/methylation_reads_qc','--task-dir','{task_dir}']}
+        '--output','{result_dir}/methylation_reads_qc','--task-dir','{task_dir}']}
     if a.smoke_test:
         shutil.copy2(a.smoke_test,dest/'tools/methylation_reads_qc_smoke.py')
         cfg['analysis']['task_commands']['reads_qc_smoke']=['{python}','{project}/tools/methylation_reads_qc_smoke.py','--task-dir','{task_dir}']
@@ -58,7 +62,7 @@ def main():
     plan={'schema_version':1,'run_id':run,'project':str(dest),'created_at':datetime.now(timezone.utc).isoformat(),
         'status':'planned','routes':{x:False for x in ['scanpy','allcools','methscan_vmr','methscan_dmr','methylvi_allcools','methylvi_vmr','methylvi_vmr_dmr']},
         'input_signature':pre['input_signature'],'code_signature':pre['code_signature'],'runtime_identity':runtime_identity(dest),
-        'plan_identity_version':2,'result_dir':str(root/'Results/runs'/run),'tasks':tasks,
+        'plan_identity_version':2,'result_layout_version':2,'result_category':'methylation_qc','result_dir':str(result_dir),'tasks':tasks,
         'custom_scope':'Opt-in SeekGene method 2 read-count diagnostics; pinned sources, explicit IDs, no detector calls or cell filtering.'}
     write_json(dest/'.workflow/runs'/run/'preflight.json',pre); write_json(dest/'.workflow/runs'/run/'plan.json',plan)
     print(json.dumps(submit(dest,run),indent=2),flush=True)

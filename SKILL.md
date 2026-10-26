@@ -1,6 +1,6 @@
 ---
 name: scautopilot
-description: Create, execute, iteratively review, and plot portable single-cell RNA and DNA-methylation projects with Scanpy/Harmony, MethSCAn, ALLCools, and MethylVI. Use with 10x matrices and indexed per-cell ALLC, including existing-project continuation, candidate annotation and publication figures. Also integrate supplied Bismark, MethSCAn and vmrseq acceleration packages through optional explicit adapters.
+description: Create, execute, iteratively review, and plot portable single-cell RNA and DNA-methylation projects with Scanpy/Harmony, MethSCAn, ALLCools, and MethylVI. Use with 10x matrices and indexed per-cell ALLC, including existing-project continuation, candidate annotation and publication figures. Also guide methylome atlases, shared RNA–DNAm markers, subject-level disease comparisons and supplied Bismark/MethSCAn/vmrseq acceleration benchmarks through explicit adapters.
 ---
 
 # scAutoPilot
@@ -17,6 +17,10 @@ study supplies lessons, not default sample identities, parameters or approval.
 | Continue or diagnose an existing project | Read its configuration, stage Reports, selected run plan and completion evidence. Use its bundled `tools/`; do not regenerate the project. Read [execution](references/execution.md) or [troubleshooting](references/troubleshooting.md) as needed. |
 | Improve or select an analysis | Read [iteration practice](references/iteration-practice.md). Identify the incumbent, evidence, allowed changes and stopping condition. For Scanpy read [automatic review](references/optimization.md); for MethSCAn/MethylVI read [methylation iteration](references/methylation-optimization.md). For published alternatives or confirmatory methods, read [literature-backed methods](references/published-methods.md). |
 | Revise labels or figures | Locate the exact source run and annotation revision. Read [Scanpy annotation](references/scanpy.md) or [publication figures](references/publication-figures.md); reuse saved coordinates for presentation-only work. |
+| Build or continue a methylome/RNA study | Read [methylome atlas](references/methylome-atlas.md); resolve cohort, physical pairing, feature roles and branch readiness. |
+| Audit shared markers or revise their display | Read [shared marker selection](references/methylome-markers.md); distinguish gene–type pairs, distinct genes, uniqueness and display selection. |
+| Compare conditions within cell types | Read [subject-level disease analysis](references/methylome-disease.md); audit analysability before gene/region models and same-cell mechanism follow-up. |
+| Benchmark reference and accelerated methylome software | Read [benchmark design](references/methylome-benchmark.md) and [acceleration deployment](references/acceleration.md); distinguish execution, artifact validity and equivalence. |
 | Use supplied acceleration software | Read [acceleration backends](references/acceleration.md). Stage and verify the supplied releases, provision isolated dependencies, then choose the MethSCAn backend or an explicit Bismark/vmrseq invocation. |
 | Maintain this skill or upgrade templates | Read [template maintenance](references/template-maintenance.md). Update the portable template and distribution, test in isolation, and explain signature changes before upgrading an idle generated project. |
 
@@ -24,6 +28,18 @@ Read only the workflow references involved: [Scanpy/Harmony](references/scanpy.m
 [MethSCAn](references/methscan.md), or [ALLCools/MethylVI](references/methylvi.md).
 Existing authorization carries forward within its scope; this skill itself does
 not authorize execution, annotation approval, or unrelated experiments.
+
+## Project-wide output and plotting contract
+
+Read [result layout](references/result-layout.md) before creating outputs.
+All new analyses, including exploration, custom scripts and figure revisions,
+use `Results/runs/<category>/<run-id>/`. Built-in plans select the category;
+custom DAGs declare `--category`, and standalone exploration uses
+`tools/reserve_results.py`. Use the frozen `{result_dir}` rather than reconstructing
+a flat path. Generated project `AGENTS.md` extends these rules to work outside
+explicit skill invocation. Apply [publication figures](references/publication-figures.md)
+to every plot, including candidate plots; exploration changes review status, not
+geometry, palette, source-data or visual-check requirements.
 
 ## From inputs to completed evidence
 
@@ -42,7 +58,7 @@ not authorize execution, annotation approval, or unrelated experiments.
    validation reads inputs in distributed compute jobs. The explicit
    `--skip-full-validation` option records missing evidence, not a passing check.
 4. Plan a distinct DAG with `tools/plan_workflow.py`. Outputs belong in
-   `Results/runs/<run-id>/`; reuse an ID only to resume its matching signed plan.
+   `Results/runs/<category>/<run-id>/`; reuse an ID only to resume its matching signed plan.
    For authorized execution, inspect scheduler resources immediately before each
    submission. Never execute a planned task on a Slurm submit host.
    Run analysis and numerical review on compute nodes, or on a standalone machine

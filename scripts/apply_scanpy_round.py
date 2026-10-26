@@ -95,7 +95,7 @@ def _apply(project: Path, session_id: str, round_id: str, next_run_id: str) -> D
             expected != plan.get('next_parameters') or expected == base):
         raise ApplyError('round diff and next_parameters disagree or change more than one axis')
     if next_run_id == plan.get('parent_run_id') or (project / '.workflow/runs' / next_run_id).exists() or (
-            project / 'Results/runs' / next_run_id).exists():
+            project / 'Results/runs' / next_run_id).exists() or any((project / 'Results/runs').glob('*/' + next_run_id)):
         raise ApplyError('next-run-id must identify a new run')
 
     analysis_path = project / "config" / "analysis.yaml"

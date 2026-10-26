@@ -1,5 +1,25 @@
 # Template maintenance
 
+Version 0.16.0 implements categorized result roots in built-in/custom/QC planners,
+submission/execution checks and report links. New tools `result_paths.py` and
+`reserve_results.py` are distributed with the generator; generated AGENTS.md
+applies path and figure rules to exploration too. Custom plans now require an
+explicit category and output arguments use `{result_dir}`. This changes runtime
+signatures: freeze a new maintained executor, validate and plan afresh. Do not
+patch active/frozen executors or relocate historical results during skill sync.
+Existing layout-v1 plan paths remain readable. See [result layout](result-layout.md).
+
+Version 0.15.5 adds four methylome protocol references: atlas/feature roles,
+shared-marker selection and presentation, subject-level disease/coupling, and
+reference/accelerated benchmarking. Routing and documentation are updated;
+no runtime scripts, schemas or automatic disease/benchmark routes are added.
+Source, installed and project skill documentation may be synchronized without
+replacing any frozen executor. Project-specific scripts with pending validation
+are not promoted into portable runtime tools. Existing execution signatures and
+historical results are preserved; a future executable adapter requires its own
+tests, new runtime and signed plan.
+
+
 Version 0.15.4 adds `verify_derived_inputs.py`, consumer-side H5AD diagnostics,
 producer-scoped dependency validation and regression tests. Distribute the helper
 with the renderer and generator; these change execution signatures. Synchronize

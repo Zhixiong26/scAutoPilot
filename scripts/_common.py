@@ -1192,7 +1192,8 @@ def run_record_lines(summary: Dict[str, Any], stage: Optional[str] = None) -> Li
         lines.extend([
             "- Figure delivery / 图集：`%s`; visual review / 视觉审核：`%s`"
             % (summary["figure_delivery_status"], summary.get("visual_review_status", "pending")),
-            "- Figure manifest / 图集清单：`Results/runs/%s/figures_comparison/delivery_manifest.json`" % run_id,
+            "- Figure manifest / 图集清单：`%s`" % (summary.get("figure_manifest") or
+                str(Path(summary.get("result_dir") or ("Results/runs/" + run_id)) / "figures_comparison/delivery_manifest.json")),
         ])
     return lines
 
