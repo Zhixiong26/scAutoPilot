@@ -171,7 +171,10 @@ def make_tasks(routes: Dict[str, bool], analysis: Dict[str, Any]) -> List[dict]:
                 raise WorkflowError("figures_comparison.source_runs must map task IDs to run_id/task_id")
             if not set(reuse) <= {x["id"] for x in tasks}:
                 raise WorkflowError("figures_comparison.source_runs names an unplanned task")
+            if not isinstance(delivery.get("legend_single_line", False), bool):
+                raise WorkflowError("figures_comparison.legend_single_line must be boolean")
             spec = {"routes": routes, "weights": weights, "source_runs": reuse,
+                    "legend_single_line": delivery.get("legend_single_line", False),
                     "allcools_max_features": max(feature_targets) if routes.get("allcools") else None,
                     "models": [{"id": x["id"], "parameters": x["parameters"]} for x in tasks],
                     "supervised_target_key": "cell_type"}

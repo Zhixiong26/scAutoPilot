@@ -233,6 +233,14 @@ exception; their individual embedding exports retain the shared standard.
 Preserve saved display order and colors across independent renderers.
 Artifact completion and visual approval are separate evidence states.
 
+Before claiming a full analysis delivery is complete, run `tools/audit_delivery.py`
+with the user's requested routes, including for custom DAGs. A successful task or
+an overview preview is insufficient. Read [delivery self-check](references/delivery-audit.md)
+for the required command, multi-run annotation bindings and additional requested
+files. Fix missing artifacts and obtain a passing audit before claiming completion;
+otherwise report the exact unfinished items. Candidate figures can pass delivery
+checks while remaining explicitly unapproved biological interpretations.
+
 Read [Git collaboration](references/git.md) only for requested repository actions.
 Generated projects carry their runtime tools and do not depend on this skill
 remaining installed.

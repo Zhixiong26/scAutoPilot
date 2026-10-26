@@ -1,5 +1,13 @@
 # Template maintenance
 
+Version 0.16.3 adds the explicit full-delivery gate `audit_delivery.py`, distributed
+to generated projects. It detects custom DAG omissions of publication comparison
+and summary, stale/missing visual reviews and incomplete multi-run Scanpy
+annotation bundles. It does not infer scope from successful tasks or confer
+biological approval. Deploy to idle executors and plan afresh after runtime changes.
+Comparison rendering also supports an explicit single-line legend option, shared
+by the atlas and individual panels; the default wrapping behavior is unchanged.
+
 Version 0.16.2 permits direct replacement of figures for requested pure appearance
 changes. No mandatory new revision or additional approval is needed; scientific
 inputs/identities remain unchanged and affected artifact/checksum/visual-review

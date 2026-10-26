@@ -50,5 +50,9 @@ the skill was not explicitly invoked:
   honestly; exploration is not an exemption from figure standards.
 
 Production jobs use the scheduler-aware signed DAG and task output evidence.
+Before a full-analysis handoff, run `tools/audit_delivery.py` with the requested
+routes and every additional promised artifact (`--require`). Custom DAG success
+does not waive formal comparison, workflow summary or fresh visual review.
+See the skill's `references/delivery-audit.md`; report incomplete checks honestly.
 Read the installed/project-local scautopilot skill for execution and recovery;
 do not bypass compute-node execution guards or substitute wrappers for completion.

@@ -267,7 +267,10 @@ def build_specs(root, plan, spec, source):
             if incomplete:
                 reasons[route].append('Cell-type delivery awaits agent marker interpretation and candidate rendering')
             rows = [make_panel(source, path, obs, coords, colors, 'X_umap_after_harmony', col,
-                               task, route, '%s\n%s (%s)' % (task, col, summary['annotation_status']),
+                               task, route, 'Scanpy | %s\n%s' % (
+                                   {'candidate_cell_type': 'Candidate cell types', 'cell_type': 'Cell types',
+                                    'leiden': 'Leiden clusters', 'cohort': 'Samples'}.get(col, col),
+                                   'Approved annotation' if summary['annotation_status'] == 'reviewed' else 'For review'),
                                summary['annotation_status']) for col in display_columns]
         elif task.startswith('methscan_vmr_'):
             route, group = 'methscan_vmr', 'methscan_vmr_ordinary'
@@ -354,6 +357,8 @@ def build_specs(root, plan, spec, source):
             else:
                 groups.setdefault(group.replace('_ordinary', '_supervised'), []).append(weighted)
         if rows:
+            for panel in rows:
+                panel['legend_single_line'] = bool(spec.get('legend_single_line', False))
             groups.setdefault(group, []).append(rows)
     source.context = None
     for route in ROUTES:
@@ -384,7 +389,8 @@ def draw(ax, panel):
     for spine in ax.spines.values():
         spine.set_color('#9a9a9a'); spine.set_linewidth(0.65)
     handles = [Line2D([], [], color=panel['palette'][c], marker='o', linestyle='', markersize=4,
-                      label=textwrap.fill(c, 24)) for c in panel.get('legend_categories', panel['categories'])]
+                      label=c if panel.get('legend_single_line') else textwrap.fill(c, 24))
+               for c in panel.get('legend_categories', panel['categories'])]
     return ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1.03, 0.5),
                      ncol=1, frameon=False, fontsize=7)
 
@@ -422,8 +428,9 @@ def render_groups(directory, groups):
             for panel in row:
                 chunks, current, lines = [], [], 0
                 for category in panel['categories']:
-                    size = len(textwrap.wrap(category, 24)) or 1
-                    if current and lines + size > 18:
+                    size = 1 if panel.get('legend_single_line') else len(textwrap.wrap(category, 24)) or 1
+                    limit = 26 if panel.get('legend_single_line') else 18
+                    if current and lines + size > limit:
                         chunks.append(current); current, lines = [], 0
                     current.append(category); lines += size
                 if current:
@@ -460,7 +467,7 @@ def render_groups(directory, groups):
                             one, axis = plt.subplots(figsize=(8, 8))
                             try:
                                 draw(axis, panel)
-                                save_embedding(one, single)
+                                save_embedding(one, single, wrap_legend=not panel.get('legend_single_line', False))
                             finally:
                                 plt.close(one)
                             image_info(single, (2400, 2400))

@@ -1,5 +1,11 @@
 # Batch comparison delivery
 
+For single-line cell-type names, set `analysis.figures_comparison.legend_single_line: true`
+before standard planning (or `legend_single_line: true` in the custom comparison
+task parameters). Atlas and individual panels preserve
+source category order and use unwrapped legend labels; legends still must fit
+the canvas. The shared helper also accepts `save_embedding(..., wrap_legend=False)`.
+
 New plans enable `analysis.figures_comparison.enabled: true`. The DAG is analysis tasks → `figures_comparison` → final `workflow_summary`. Set the boolean to false before planning to retain the previous DAG. Do not add the task to a frozen or active plan.
 
 All selected routes, including prerequisites, appear in `Results/runs/<category>/<run-id>/figures_comparison/route_coverage.tsv`:

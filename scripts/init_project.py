@@ -32,7 +32,7 @@ RUNTIME_TOOLS = (
     "submit_workflow.py", "inspect_run.py", "update_report.py", "record_annotation_review.py", "link_data.py",
     "review_scanpy_iteration.py", "apply_scanpy_round.py", "system_one_adapter_runner.py",
     "visual_vlm_runner.py",
-    "figures_comparison_evidence.py", "record_figure_review.py",
+    "figures_comparison_evidence.py", "record_figure_review.py", "audit_delivery.py",
     "prepare_scanpy_candidate_reference.py", "complete_scanpy_candidate.py",
     "optimization_state.py",
     "run_methylation_iteration.py",

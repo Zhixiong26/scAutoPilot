@@ -23,6 +23,15 @@ class EmbeddingExportTests(unittest.TestCase):
     def tearDown(self):
         self.plt.close("all")
 
+    def test_explicit_single_line_labels_survive_standardization(self):
+        figure, ax = self.plt.subplots()
+        label = 'Aerocyte capillary endothelial'
+        ax.scatter([0, 1], [0, 1], label=label)
+        ax.legend()
+        self.helper.standardize_embedding(figure, wrap_legend=False)
+        self.assertEqual(ax.get_legend().get_texts()[0].get_text(), label)
+        self.check_legend(figure, ax)
+
     def check_square(self, figure, panels):
         self.assertEqual(tuple(figure.get_size_inches()), (8, 8))
         figure.canvas.draw()

@@ -69,7 +69,7 @@ def side_colorbar(figure, ax, mappable, label):
     return bar
 
 
-def standardize_embedding(figure):
+def standardize_embedding(figure, wrap_legend=True):
     """Fit Scanpy or manually drawn embeddings and their keys into a square canvas."""
     bars = [ax._colorbar for ax in figure.axes if getattr(ax, "_colorbar", None) is not None]
     panels = [ax for ax in figure.axes if getattr(ax, "_colorbar", None) is None]
@@ -102,7 +102,7 @@ def standardize_embedding(figure):
             handles = getattr(legend, "legend_handles", None)
             if handles is None:  # Matplotlib < 3.7
                 handles = legend.legendHandles
-            labels = [textwrap.fill(t.get_text(), width=26 if columns == 1 else 14)
+            labels = [textwrap.fill(t.get_text(), width=26 if columns == 1 else 14) if wrap_legend else t.get_text()
                       for t in legend.get_texts()]
             title = legend.get_title().get_text()
             legend.remove()
@@ -139,9 +139,9 @@ def standardize_embedding(figure):
     return figure
 
 
-def save_embedding(figure, path):
+def save_embedding(figure, path, wrap_legend=True):
     """Export PNG/PDF/SVG without a tight crop that would undo the square canvas."""
-    standardize_embedding(figure)
+    standardize_embedding(figure, wrap_legend=wrap_legend)
     with mpl.rc_context({"savefig.bbox": None}):
         figure.savefig(path, dpi=EMBEDDING_DPI, bbox_inches=None, facecolor="white")
     return path
