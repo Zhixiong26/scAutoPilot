@@ -42,7 +42,6 @@ def complete(project, source_run, reference_dir, panels_path, output, task_dir):
     import numpy as np
     import pandas as pd
     import scanpy as sc
-    from PIL import Image
     from verify_derived_inputs import read_h5ad_for_consumer
     root = Path(project).resolve()
     sys.path.insert(0, str(root / 'Scripts/Common'))
@@ -118,12 +117,9 @@ def complete(project, source_run, reference_dir, panels_path, output, task_dir):
     dot.fig.text(.5, top + .04, 'Candidate annotation — awaiting user approval',
                  ha='center', va='bottom', fontsize=12)
     dot.fig.savefig(out / 'candidate_annotation_marker_dotplot.png', dpi=300, bbox_inches='tight')
-    dot.fig.savefig(out / 'candidate_annotation_marker_dotplot.pdf', bbox_inches='tight')
     dot.dot_color_df.to_csv(out / 'marker_mean_log_expression.tsv', sep='\t')
     dot.dot_size_df.to_csv(out / 'marker_fraction_expressing.tsv', sep='\t')
     plt.close('all')
-    with Image.open(out / 'candidate_annotation_marker_dotplot.png') as im:
-        im.thumbnail((2000, 1200)); im.save(out / 'dotplot_preview.png')
     for group in ('cohort', 'condition'):
         if group in a.obs:
             counts = pd.crosstab(a.obs[group], a.obs.candidate_cell_type)
@@ -132,6 +128,7 @@ def complete(project, source_run, reference_dir, panels_path, output, task_dir):
     if sha256_file(source) != source_hash:
         raise ValueError('Source changed during completion')
     write_json(out / 'candidate_delivery.json', dict(
+        figure_format_policy='png_only',
         source_h5ad=str(source), source_sha256=source_hash, source_run=source_run,
         analysis_signature=summary['analysis_signature'], cells=a.n_obs,
         clusters=int(a.obs.leiden.nunique()), placeholder_cells=0,

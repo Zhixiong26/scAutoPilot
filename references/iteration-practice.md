@@ -190,8 +190,9 @@ analysis and rendering still use compute resources. Save a retry as a supplement
 record bound to the original evidence hashes. It does not replace an applied
 round, lift an escalation, or authorize applying a failed round's fallback.
 
-If a vision service rejects an oversized image, generate a labelled preview copy
-or bounded panel crops, recording original and transmitted hashes, dimensions
-and transformations. Preserve publication originals. Do not claim visual-model
+If a vision service rejects an oversized image, use a transient in-memory resize
+or bounded panel crop for transmission, recording original and transmitted hashes,
+dimensions and transformations. Do not save preview copies in the result delivery.
+Preserve publication originals. Do not claim visual-model
 review when no usable image was transmitted, or treat an optional degraded sensor
 as a successful visual review.

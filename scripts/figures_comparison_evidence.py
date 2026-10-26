@@ -80,12 +80,28 @@ def validate_manifest(path, identity=None):
     for figure in data.get('figures', []):
         if not set(figure['files']) <= names:
             raise ValueError('unregistered atlas artifact')
+    if data.get('figure_format_policy') == 'png_only':
+        for name in names:
+            if Path(name).suffix.lower() in ('.pdf', '.svg', '.jpg', '.jpeg', '.tif', '.tiff') or name.endswith(('_preview.png', '_review.png')):
+                raise ValueError('PNG-only delivery contains a duplicate/unsupported figure: ' + name)
+        for figure in data.get('figures', []):
+            if len(figure['files']) != 1 or not figure['files'][0].endswith('.png'):
+                raise ValueError('PNG-only atlas must have exactly one final PNG')
     for source in data['sources']:
         if source.get('kind') == 'task_evidence':
             source_path = Path(source['path'])
             if not source_path.is_file() or sha(source_path) != source['sha256']:
                 raise ValueError('source task evidence changed: %s' % source_path)
     return data
+
+
+def required_review_images(manifest):
+    """Inspect final PNGs for new deliveries; retain legacy preview review records."""
+    allowed = {x['path'] for x in manifest['artifacts'] if x['path'].endswith('.png')}
+    if manifest.get('figure_format_policy') == 'png_only':
+        return {name for figure in manifest.get('figures', []) for name in figure['files']
+                if name.endswith('.png')} | {name for name in allowed if name.startswith('dmr/')}
+    return {name for name in allowed if name.endswith('_preview.png') or name.startswith('dmr/')}
 
 
 def validate_delivery_record(record, record_path=None):

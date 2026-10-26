@@ -11,10 +11,13 @@ from record_figure_review import record
 def complete(root):
     run, result, plan, manifest, _ = dummy_delivery(root)
     data = json.loads(manifest.read_text())
-    for name in ('a.png', 'a.pdf'):
+    data['figure_format_policy'] = 'png_only'
+    data['artifacts'] = [x for x in data['artifacts'] if x['path'] != 'a_preview.png']
+    (manifest.parent / 'a_preview.png').unlink()
+    for name in ('a.png',):
         (manifest.parent / name).write_bytes(b'fixture')
         data['artifacts'].append({'path': name, 'bytes': 7, 'sha256': sha(manifest.parent / name)})
-    data['figures'][0]['files'] += ['a.png', 'a.pdf']
+    data['figures'][0]['files'] = ['a.png']
     data['panels'][0].update(route='scanpy', column='candidate_cell_type', annotation_status='candidate_auto_annotated_requires_review')
     for row in data['route_coverage']:
         row.update(selected=row['route'] == 'scanpy', entries=1 if row['route'] == 'scanpy' else 0,
@@ -30,7 +33,7 @@ def complete(root):
     write_json(book, {'cells': [{'cell_type': 'code', 'source': ['1+1'], 'execution_count': 1, 'outputs': []}]})
     write_json(result / 'scanpy/completion_summary.json', {'notebook': str(book)})
     (root / 'Results/RESULTS_INDEX.md').write_text('test delivery')
-    record(root, 'test', 'passed', 'fixture', 'test image review', ['a_preview.png', 'single_panels/a.png'])
+    record(root, 'test', 'passed', 'fixture', 'test image review', ['a.png', 'single_panels/a.png'])
     return run, result, plan, manifest
 
 
@@ -78,13 +81,42 @@ class DeliveryAuditTests(unittest.TestCase):
                     path.unlink()
                 self.assertIn('visual_review', audit(root, 'test', ['scanpy'])['failed_checks'])
 
-    def test_missing_pdf_and_additional_promised_file_fail(self):
+    def test_missing_final_png_and_additional_promised_file_fail(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); _, _, _, manifest = complete(root)
-            (manifest.parent / 'a.pdf').unlink()
-            report = audit(root, 'test', ['scanpy'], required=['missing_dotplot.pdf'])
+            (manifest.parent / 'a.png').unlink()
+            report = audit(root, 'test', ['scanpy'], required=['missing_dotplot.png'])
             self.assertEqual(report['status'], 'incomplete')
-            self.assertIn('required:missing_dotplot.pdf', report['failed_checks'])
+            self.assertIn('required:missing_dotplot.png', report['failed_checks'])
+
+    def test_png_only_delivery_needs_no_pdf_or_preview(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); _, _, _, manifest = complete(root)
+            self.assertFalse(list(manifest.parent.rglob('*.pdf')))
+            self.assertFalse(list(manifest.parent.rglob('*preview.png')))
+            self.assertEqual(audit(root, 'test', ['scanpy'])['status'], 'complete')
+
+    def test_png_only_manifest_rejects_registered_duplicate_formats(self):
+        from figures_comparison_evidence import validate_manifest
+        for name in ('a.pdf', 'a_preview.png'):
+            with tempfile.TemporaryDirectory() as temp:
+                root = Path(temp); _, _, _, manifest = complete(root)
+                path = manifest.parent / name; path.write_bytes(b'extra')
+                data = json.loads(manifest.read_text())
+                data['artifacts'].append({'path': name, 'bytes': 5, 'sha256': sha(path)})
+                write_json(manifest, data)
+                with self.assertRaisesRegex(ValueError, 'PNG-only'):
+                    validate_manifest(manifest)
+
+    def test_single_panel_review_cannot_replace_final_atlas_review(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp); run, _, _, _ = complete(root)
+            with self.assertRaisesRegex(ValueError, 'final atlas'):
+                record(root, 'test', 'passed', 'fixture', 'missing atlas', ['single_panels/a.png'])
+            path = run / 'figure_review.json'
+            data = json.loads(path.read_text()); del data['inspected']['a.png']
+            write_json(path, data)
+            self.assertIn('visual_review', audit(root, 'test', ['scanpy'])['failed_checks'])
 
     def test_unselected_requested_route_fails(self):
         with tempfile.TemporaryDirectory() as temp:

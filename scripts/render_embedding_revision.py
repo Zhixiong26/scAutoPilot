@@ -90,9 +90,8 @@ def render(project, spec_path, output, task_dir):
         fig = sc.pl.umap(a, color=key, title=panel['title'], size=spec.get('point_size', 7),
                          show=False, return_fig=True, frameon=True)
         stem = 'panel_%02d' % i
-        png, pdf, preview = [out / (stem + ext) for ext in ('.png', '.pdf', '_preview.png')]
+        png = out / (stem + '.png')
         save_embedding(fig, png)
-        save_embedding(fig, pdf)
         fig.canvas.draw()
         axes = [ax for ax in fig.axes if getattr(ax, '_colorbar', None) is None]
         if len(axes) != 1:
@@ -105,9 +104,8 @@ def render(project, spec_path, output, task_dir):
         with Image.open(png) as im:
             if im.size != (2400, 2400):
                 raise WorkflowError('Embedding PNG must be 2400 by 2400')
-            im.thumbnail((800, 800)); im.save(preview)
-        record = dict(key=key, title=panel['title'], kind=kind, png=png.name, pdf=pdf.name,
-                      preview=preview.name, canvas_inches=[8, 8], png_pixels=[2400, 2400],
+        record = dict(key=key, title=panel['title'], kind=kind, png=png.name,
+                      canvas_inches=[8, 8], png_pixels=[2400, 2400],
                       axes_inches=[box.width / fig.dpi, box.height / fig.dpi],
                       equal_data_units=True, palette_source=palette_source,
                       scatter_rasterized=[bool(c.get_rasterized()) for c in ax.collections])
@@ -133,21 +131,14 @@ def render(project, spec_path, output, task_dir):
     if sha256_file(path) != source['sha256']:
         raise WorkflowError('Source changed during rendering')
     pd.DataFrame(composition).to_csv(out / 'panel_composition.tsv', sep='\t', index=False)
-    # Preview contact sheet preserves every individual panel's geometry/legend.
-    cols = 2; rows = (len(panels) + 1) // 2
-    sheet = Image.new('RGB', (800 * cols, 800 * rows), 'white')
-    for i, panel in enumerate(panels):
-        with Image.open(out / panel['preview']) as im:
-            sheet.paste(im.convert('RGB'), ((i % cols) * 800, (i // cols) * 800))
-    sheet.save(out / 'overview_preview.png')
     lines = ['# Embedding figure revision', '', spec['description'], '',
              'Saved coordinates and cell membership are unchanged. Candidate labels remain candidates.', '',
-             '| Panel | PNG | PDF |', '|---|---|---|']
-    lines += ['| %s | [PNG](%s) | [PDF](%s) |' % (p['title'], p['png'], p['pdf']) for p in panels]
+             '| Panel | PNG |', '|---|---|']
+    lines += ['| %s | [PNG](%s) |' % (p['title'], p['png']) for p in panels]
     (out / 'README.md').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     artifacts = [dict(path=f.name, bytes=f.stat().st_size, sha256=sha256_file(f))
                  for f in sorted(out.iterdir()) if f.is_file()]
-    manifest = dict(status='rendered_verified', presentation_only=True, analysis_rerun=False,
+    manifest = dict(status='rendered_verified', figure_format_policy='png_only', presentation_only=True, analysis_rerun=False,
                     coordinates_recomputed=False, source=source,
                     source_input_signature=plan['input_signature'], source_code_signature=plan['code_signature'],
                     settings_sha256=sha256_file(spec_path), cells=a.n_obs,

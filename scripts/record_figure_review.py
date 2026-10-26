@@ -5,7 +5,7 @@ import argparse
 from datetime import datetime, timezone
 from pathlib import Path
 from _common import write_json
-from figures_comparison_evidence import read_json, sha, safe_artifact, validate_manifest, task_evidence
+from figures_comparison_evidence import read_json, sha, safe_artifact, validate_manifest, task_evidence, required_review_images
 
 
 def record(project, run_id, status, reviewer, notes, inspected):
@@ -24,10 +24,10 @@ def record(project, run_id, status, reviewer, notes, inspected):
     names = set(inspected)
     if not names <= allowed:
         raise ValueError('inspected files must be PNGs in the current delivery')
-    required_previews = {name for name in allowed if name.endswith('_preview.png') or name.startswith('dmr/')}
-    if status == 'passed' and (not required_previews <= names or
+    required_images = required_review_images(manifest)
+    if status == 'passed' and (not required_images <= names or
             (manifest.get('panels') and not any(x.startswith('single_panels/') for x in names))):
-        raise ValueError('passing review requires all previews/DMR plots and at least one single panel')
+        raise ValueError('passing review requires all final atlas/DMR PNGs (all previews for legacy deliveries) and at least one single panel')
     payload = {'schema_version': 1, 'run_id': run_id, 'status': status, 'reviewer': reviewer,
                'notes': notes, 'at': datetime.now(timezone.utc).isoformat(), 'manifest_sha256': sha(path),
                'inspected': {name: sha(safe_artifact(path.parent, name)) for name in sorted(names)}}

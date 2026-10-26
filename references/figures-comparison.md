@@ -24,7 +24,7 @@ ALLCools feature subsets do not each have a newly computed native UMAP. DMR deli
 
 Ordinary and label-guided layouts are separate. A supervised summary that legitimately skipped because fewer than two real labels exist produces an explicit not-applicable entry and preserves ordinary figures. A missing summary, missing planned weight or unexplained skip is an error. No training, UMAP calculation or raw ALLC reading is performed for delivery.
 
-Each atlas provides 600 dpi PNG, vector PDF, preview, and individual 8×8 inch / 300 dpi PNGs through `embedding_plot.save_embedding`. Comparison canvases are an explicit exception to the square-canvas rule. Panels retain equal aspect, a single-column legend and no tight cropping. Pages contain at most three model rows and three columns; large legends split into labelled pages that retain all cells and colours. Every panel has its own source legend; equal cluster numbers in different models do not assert a shared cell identity.
+Each atlas provides one final 600 dpi PNG and individual 8×8 inch / 300 dpi PNGs through `embedding_plot.save_embedding`. Comparison canvases are an explicit exception to the square-canvas rule. Panels retain equal aspect, a single-column legend and no tight cropping. Pages contain at most three model rows and three columns; large legends split into labelled pages that retain all cells and colours. Every panel has its own source legend; equal cluster numbers in different models do not assert a shared cell identity.
 
 Palette precedence is explicit `uns[column + '_display_order']` with `uns[column + '_display_palette']`, saved categorical `uns` colours, source run settings, then reconstruction using the source plotting rule in the declared Scanpy environment. Explicit display metadata is stored as parallel arrays so labels containing `/` are safe in HDF5. The manifest records the origin and version; it never labels a reconstructed palette as a stored original. MethSCAn's sorted-category tab20 rule is a fallback when no stored palette exists. Incomplete/duplicate display orders, uncovered labels and inconsistent saved palettes fail validation.
 
@@ -47,15 +47,15 @@ rasters does not perform the matrix audit or produce a balanced heatmap.
 
 `run_summary.json` distinguishes `analysis_status`, `figure_delivery_status` and `visual_review_status`. The ordinary run `status` describes automatic DAG completion. `rendered_verified` means file verification, not visual or biological approval. Stage reports also show the run-level delivery state, separately from stage task counts.
 
-After actually examining all previews/DMR plots and representative single panels, record the outcome:
+After actually examining all final atlas/DMR PNGs and representative single panels, record the outcome:
 
 ```bash
 python tools/record_figure_review.py --project . --run-id <run-id> \
   --status passed --reviewer '<reviewer>' --notes '<inspection findings>' \
-  --inspected <atlas>_preview.png single_panels/<panel>.png
+  --inspected <atlas>.png single_panels/<panel>.png
 ```
 
-Supply every preview and DMR PNG, plus at least one single panel when present. Use `failed` and describe problems if inspection fails. The tool requires valid task evidence and binds the review to the manifest and inspected file hashes. It stores `.workflow/runs/<run-id>/figure_review.json` separately from immutable figure artifacts. Changed artifacts invalidate the review. No record means pending; only passed means visual delivery complete. This review does not approve a cell-type annotation or biological conclusion.
+Supply every final atlas and DMR PNG, plus at least one single panel when present. Use `failed` and describe problems if inspection fails. The tool requires valid task evidence and binds the review to the manifest and inspected file hashes. It stores `.workflow/runs/<run-id>/figure_review.json` separately from immutable figure artifacts. Changed artifacts invalidate the review. No record means pending; only passed means visual delivery complete. This review does not approve a cell-type annotation or biological conclusion.
 
 ## Upgrade
 

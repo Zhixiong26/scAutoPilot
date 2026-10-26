@@ -140,7 +140,7 @@ def standardize_embedding(figure, wrap_legend=True):
 
 
 def save_embedding(figure, path, wrap_legend=True):
-    """Export PNG/PDF/SVG without a tight crop that would undo the square canvas."""
+    """Export one figure without tight cropping; project deliveries call with a PNG path."""
     standardize_embedding(figure, wrap_legend=wrap_legend)
     with mpl.rc_context({"savefig.bbox": None}):
         figure.savefig(path, dpi=EMBEDDING_DPI, bbox_inches=None, facecolor="white")

@@ -377,6 +377,26 @@ class SourceAdapterTests(unittest.TestCase):
             renderer.embedding(sources,path)
 
     @unittest.skipUnless(os.environ.get('SCMO_FIGURE_SMOKE') == '1', 'render smoke requires a compute allocation')
+    def test_embedding_revision_outputs_only_final_pngs(self):
+        from render_embedding_revision import render
+        run_dir, result, plan, spec = self.populate(('scanpy',))
+        source = result / 'scanpy/iterations/test/candidate_analysis.h5ad'
+        mark_complete(run_dir, plan, plan['tasks'][0], [source])
+        settings = self.root / 'panels.json'
+        write_json(settings, {'source': {'path': str(source), 'sha256': sha(source),
+                    'run_dir': str(run_dir), 'task_id': 'scanpy'},
+            'panels': [{'key': 'candidate_cell_type', 'kind': 'categorical', 'title': 'Candidate types'}],
+            'annotation_status': 'candidate_auto_annotated_requires_review', 'description': 'PNG-only smoke'})
+        output = result / 'embedding_revision'
+        render(ROOT / 'assets/project-template', settings, output, run_dir / 'tasks/render_revision')
+        self.assertEqual([x.name for x in output.glob('*.png')], ['panel_01.png'])
+        self.assertFalse(list(output.glob('*.pdf')))
+        manifest = json.loads((output / 'delivery_manifest.json').read_text())
+        self.assertEqual(manifest['figure_format_policy'], 'png_only')
+        self.assertNotIn('preview', manifest['panels'][0])
+        self.assertNotIn('pdf', manifest['panels'][0])
+
+    @unittest.skipUnless(os.environ.get('SCMO_FIGURE_SMOKE') == '1', 'render smoke requires a compute allocation')
     def test_render_publish_recover_and_tamper(self):
         run_dir,result,plan,spec=self.populate(('scanpy',))
         output=renderer.run(self.root,'test')
@@ -384,6 +404,10 @@ class SourceAdapterTests(unittest.TestCase):
         digest=sha(manifest)
         data=validate_manifest(manifest)
         self.assertEqual(len(data['panels']),3)
+        self.assertEqual(data['figure_format_policy'], 'png_only')
+        self.assertFalse(list(output.rglob('*.pdf')))
+        self.assertFalse(list(output.rglob('*preview.png')))
+        self.assertTrue(all(len(x['files']) == 1 and x['files'][0].endswith('.png') for x in data['figures']))
         self.assertTrue(validate_recorded_outputs([str(run_dir/'tasks/figures_comparison/task_outputs.json')])[0])
         for panel in data['panels']:
             self.assertEqual(renderer.image_info(output/panel['single_png']),[2400,2400])

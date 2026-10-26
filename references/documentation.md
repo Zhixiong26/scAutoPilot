@@ -68,8 +68,8 @@ Updating this index is part of figure delivery, recovery and progress inspection
 do it without another user request when new outputs are confirmed. Do not wait
 for the whole multi-branch run to finish before indexing a completed branch.
 
-- Link the result directory, manifest/report, main PNG/PDF, comparison atlas and
-  preview when present. For large repeated sets, link a per-run inventory with
+- Link the result directory, manifest/report, final PNGs and comparison atlas. Link historical previews/PDFs only
+  when already present; do not generate new duplicate formats. For large repeated sets, link a per-run inventory with
   all figures instead of flooding the top-level index. Check that links resolve.
 - Record project/run, task, cohort/input selection, feature route and parameters
   needed to distinguish versions. Keep original versus label-guided UMAP,

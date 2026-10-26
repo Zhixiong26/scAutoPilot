@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 from _common import write_json
-from figures_comparison_evidence import ROUTES, read_json, sha, task_evidence, validate_manifest, review_state
+from figures_comparison_evidence import ROUTES, read_json, sha, task_evidence, validate_manifest, review_state, required_review_images
 
 
 def audit(project, run_id, routes, source_runs=(), annotation_run=None, required=()):
@@ -67,10 +67,8 @@ def audit(project, run_id, routes, source_runs=(), annotation_run=None, required
             require(bool(manifest.get('figures')), 'panels lack comparison atlas')
             for figure in manifest['figures']:
                 files = figure['files']
-                require(any(x.endswith('.pdf') for x in files) and
-                        any(x.endswith('_preview.png') for x in files) and
-                        any(x.endswith('.png') and not x.endswith('_preview.png') for x in files),
-                        'atlas requires full PNG, PDF and preview')
+                require(any(x.endswith('.png') and not x.endswith(('_preview.png', '_review.png')) for x in files),
+                        'atlas requires a final PNG; PDF and preview copies are not required')
             require(any(x.startswith('single_panels/') and x.endswith('.png') for x in names), 'single panels missing')
         if 'scanpy' in routes:
             panels = [x for x in manifest.get('panels', []) if x.get('route') == 'scanpy']
@@ -88,9 +86,8 @@ def audit(project, run_id, routes, source_runs=(), annotation_run=None, required
             require(state == 'passed', 'visual review is ' + state)
             manifest, review = read_json(path), read_json(record)
             inspected = set(review['inspected'])
-            expected = {x['path'] for x in manifest['artifacts']
-                        if x['path'].endswith('_preview.png') or x['path'].startswith('dmr/') and x['path'].endswith('.png')}
-            require(expected <= inspected, 'not all previews/DMR images inspected')
+            expected = required_review_images(manifest)
+            require(expected <= inspected, 'not all required atlas/DMR images inspected')
             require(not manifest.get('panels') or any(x.startswith('single_panels/') for x in inspected), 'single-panel review missing')
             return state
         check('visual_review', review)

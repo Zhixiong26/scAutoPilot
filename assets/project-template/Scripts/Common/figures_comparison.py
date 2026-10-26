@@ -484,13 +484,11 @@ def render_groups(directory, groups):
                     prefix = '%s_r%d_c%d' % (group_name, row_start+1, col_start+1)
                     files = []
                     with mpl.rc_context({'savefig.bbox': None}):
-                        for suffix, dpi in (('.png', 600), ('.pdf', 600), ('_preview.png', 100)):
+                        for suffix, dpi in (('.png', 600),):
                             path = directory / (prefix + suffix)
                             fig.savefig(path, dpi=dpi, bbox_inches=None, facecolor='white')
                             if path.suffix == '.png':
                                 image_info(path, (int(width*dpi), int(height*dpi)))
-                            elif path.read_bytes()[:5] != b'%PDF-':
-                                raise ValueError('invalid PDF export')
                             files.append(path.name)
                     figures.append({'group': group_name, 'files': files, 'panels': page_panels,
                                     'inches': [width, height], 'dpi': 600, 'rows': nr, 'columns': nc})
@@ -555,7 +553,7 @@ def run(root, run_id):
             (attempt / 'README.md').write_text(text, encoding='utf-8')
             artifacts = [{'path': str(path.relative_to(attempt)), 'bytes': path.stat().st_size, 'sha256': sha(path)}
                          for path in sorted(attempt.rglob('*')) if path.is_file()]
-            manifest = dict(identity, schema_version=1, status='rendered_verified',
+            manifest = dict(identity, schema_version=1, status='rendered_verified', figure_format_policy='png_only',
                 created_at=datetime.now(timezone.utc).isoformat(), host=socket.gethostname(),
                 slurm_job_id=os.environ.get('SLURM_JOB_ID'), presentation_only=True,
                 analysis_rerun=False, coordinates_recomputed=False,

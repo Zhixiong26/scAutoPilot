@@ -65,7 +65,7 @@ After exporting the reference, plan a custom DAG with two tasks:
 2. Use `render_embedding_revision.py` on that declared H5AD, depending on the
    first task. Include candidate cell type, confidence, Leiden, sample, condition
    and QC panels. Its source declaration names the new producer task and digest.
-   Inspect the previews, record visual review, and link the complete revision at
+   Inspect the final PNGs, record visual review, and link the complete revision at
    the top of the results index. Preserve the original numerical artifacts.
 
 There is no requirement to rerun a baseline or obtain approval before producing
@@ -78,7 +78,7 @@ annotation work; a batch completion hook is not an unattended annotator.
 
 ## Figure standard
 
-All intermediate, candidate, baseline and publication UMAPs use the shared `Scripts/Common/embedding_plot.py` helper. `save_embedding(figure, path)` exports an **8 × 8 in square canvas**, including its legend, at **300 dpi (2400 × 2400 px PNG)**. PDF/SVG use the same physical size. Never use `bbox_inches='tight'` for these exports: a tight crop changes the canvas shape. The helper overrides even a global `savefig.bbox='tight'` setting.
+All intermediate, candidate, baseline and publication UMAPs use the shared `Scripts/Common/embedding_plot.py` helper. `save_embedding(figure, path)` exports an **8 × 8 in square canvas**, including its legend, at **300 dpi (2400 × 2400 px PNG)**. Do not generate PDF/SVG or duplicate preview/review images. Never use `bbox_inches='tight'` for these exports: a tight crop changes the canvas shape. The helper overrides even a global `savefig.bbox='tight'` setting.
 
 Single-panel axes remain 4 × 4 in; comparison figures fit smaller square panels into the same canvas (two panels are stacked at 3.04 × 3.04 in each; larger comparisons use a grid). Construction and export both use the shared `panel_positions()` rule; the notebook's `figure-standard` cell imports helpers, rather than defining another geometry. `square_panels()` first gives before/after views a common data window; the shared exporter preserves that window and equal aspect without stretching coordinates. Compare like-for-like single panels across rounds rather than a single plot to a smaller overview panel.
 

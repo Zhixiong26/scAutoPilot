@@ -187,12 +187,17 @@ optimize circular label agreement, disease mixing, DMR significance or plot beau
 
 ## Figure delivery
 
+Generate one final PNG per figure. Do not generate PDF/SVG versions, separate
+review/preview PNGs, thumbnails or preview-only contact sheets. Inspect the final
+PNGs directly; source tables, manifests and visual-review records remain required.
+Apply this to built-in workflows, custom scripts and exploratory plots.
+
 After every task finishes (including handled failures and recovery), update
 `Results/RESULTS_INDEX.md` without waiting for a separate user request. Before
 submitting a new run, verify its frozen executor contains the completion index
 hook; skill text alone is not automation. If the user names a cross-project
 master index, configure its parent in `Results/index_targets.json` and smoke-test
-both local and master publication. Include verified existing figure/preview paths, source
+both local and master publication. Include verified existing final PNG paths, source
 run and analysis identity, and separate artifact and visual-review states.
 Index a completed branch even if sibling tasks are still running. Do not claim
 background auto-refresh unless a real scheduled completion hook exists.
@@ -224,7 +229,7 @@ individual panels. Dotplots and heatmaps need not be square.
 For a custom saved-H5AD embedding, use `tools/render_embedding_revision.py`
 with an explicit source-task and panel specification. It checks exported canvas,
 axes, legend and colorbar geometry and records palette provenance. A readable
-preview alone cannot pass these checks; record visual review separately.
+PNG alone cannot pass these checks; record visual review separately.
 
 Selected routes receive a comparison delivery before the workflow summary.
 Read [batch figure delivery](references/figures-comparison.md) for source adapters,

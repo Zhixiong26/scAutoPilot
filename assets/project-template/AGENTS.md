@@ -26,17 +26,19 @@ Read the project-local scautopilot `references/publication-figures.md` and
 the skill was not explicitly invoked:
 
 - Individual embeddings use `Scripts/Common/embedding_plot.py:save_embedding()`:
-  8×8 inch, 300 dpi, 2400×2400 PNG and matching PDF; square axes with equal data
+  8×8 inch, 300 dpi, 2400×2400 PNG only; square axes with equal data
   aspect, outside single-column categorical legend or vertical numerical bar,
   no tight cropping. The helper may be imported by temporary scripts.
 - Dotplots/heatmaps/comparison canvases use an appropriate layout; do not force
-  them square. Export individual standard embedding panels alongside previews.
+  them square. Export final PNGs only, including standard individual panels.
+  Do not generate PDF/SVG, preview/review image duplicates, thumbnails or
+  preview-only contact sheets. Inspect final PNGs directly.
 - Pure appearance edits may directly overwrite requested figures without a new
   revision directory or another approval. Typography, legend grouping/order,
   wrapping, spacing, colours and point styling may change; preserve coordinates,
   cells, measurements, cluster membership and biological label meaning. Verify
   temporary renders before replacement and refresh affected manifests, artifact
-  checksums, visual review, previews and index links. Wait for any active writer.
+  checksums, visual review and index links. Wait for any active writer.
   Data or scientific/annotation changes require a new result revision.
 - Preserve unrequested display settings for plot-only edits. Keep gene scales,
   missingness, denominators and support counts

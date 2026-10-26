@@ -20,7 +20,7 @@ coordinates, cluster membership and biological label meaning. Do not rewrite
 the source H5AD merely to change a figure's appearance.
 
 Render to temporary files and verify them before replacing the requested files;
-keep PNG/PDF and affected previews consistent. Update the affected figure
+keep the final PNGs consistent. Update the affected figure
 manifest, checksums/sealed artifact records, visual-review record and result
 index so an intentional replacement is not reported as artifact corruption.
 Do not change historical scientific signatures or invent a new analysis run.
@@ -51,7 +51,7 @@ AnnData presentation metadata should use parallel `*_display_order` and
 ## Panel requirements
 
 - **Embeddings:** use `embedding_plot.save_embedding()` for 8 × 8 inch,
-  300 dpi individual PNGs and matching physical-size PDFs. Axes must be square
+  300 dpi individual PNGs only. Axes must be square
   with isotropic data units, preserving the point cloud's natural shape. Check
   both axes geometry and equal horizontal/vertical unit scale; a square canvas
   alone is insufficient. Keep categorical legends single-column and numerical
@@ -78,11 +78,10 @@ AnnData presentation metadata should use parallel `*_display_order` and
   conditions are separate series, not additive stacked portions of one total.
   Pooled-cell summaries are descriptive, not donor-level differential-abundance
   evidence.
-- **Vector output:** describe rasterized scatter layers and embedded heatmap
-  rasters honestly. Wrapping a PNG in PDF does not recover vector source data.
+- **Output format:** one final PNG per figure; no PDF/SVG, separate review/preview
+  images, thumbnails or preview-only contact sheets.
 
-Build previews for review without changing the publication originals. Inspect
-all previews and heatmaps plus representative single panels for overlap,
+Inspect the final PNGs directly: all atlases and heatmaps plus representative single panels for overlap,
 clipping, label readability, palette consistency, panel letters and numerical
 colour bars. For automatic atlas delivery use `record_figure_review.py`; for
 additional publication deliveries save a separate review bound to their hashes.
@@ -151,14 +150,14 @@ The JSON specification contains `source` (`path`, `sha256`, `run_dir`, `task_id`
 (`key`, `title`, `kind`: categorical or continuous). All source columns must exist.
 The declared source task must have valid evidence and list that exact H5AD.
 
-The renderer exports numbered individual PNG/PDF panels, low-resolution previews,
-a preview-only contact sheet, coordinates/labels and composition tables, and a
+The renderer exports numbered individual PNG panels, coordinates/labels and
+composition tables, and a
 checksum-bound manifest. It checks 2400×2400 pixels, square axes with isotropic
 units, external single-column categorical legends, and vertical numerical bars.
 Source palettes take precedence; a Scanpy default reconstruction is named as such.
-No clinical condition or new annotation is inferred. Review every preview and
+No clinical condition or new annotation is inferred. Review every final atlas PNG and
 representative full-size categorical/numerical panels, then save a separate
-hash-bound review. Do not call a general preview readability pass a geometry pass.
+hash-bound review. Do not call a general image readability pass a geometry pass.
 
 ## Shared RNA–DNAm marker panels
 

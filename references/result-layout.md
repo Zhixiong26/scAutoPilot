@@ -53,7 +53,7 @@ ad hoc spelling (`methylvi` is canonical).
 
 Pure appearance edits may replace existing figures in place; they do not require
 a new run or publication revision. Preserve scientific data and update affected
-manifests, checksums, previews, visual review and index links. See
+manifests, checksums, visual review and index links. See
 [publication figures](publication-figures.md) for this replacement policy.
 
 Within a run, group artifacts by function (`tables/`, `models/`, `reports/`,
@@ -78,9 +78,8 @@ to their data; the square rule applies to individual embeddings. DMR heatmaps
 retain the four-view contract when applicable.
 
 Every delivered figure revision has source/settings and table data, a manifest
-with hashes/geometry, and a separately recorded visual review. Preview-only
-contact sheets and lower-resolution previews are named as such and link to the
-standard panels. Diagnose a failure rather than declaring an unchecked figure
+with hashes/geometry, and a separately recorded visual review. Deliver one final PNG per figure; do not create PDF or duplicate preview/review
+images or preview-only contact sheets. Diagnose a failure rather than declaring an unchecked figure
 compliant. Automated geometry checks do not replace inspection of clipping,
 labels, legends and biological meaning. The user may authorize first-pass final
 figures without a permission round; visual inspection still occurs.

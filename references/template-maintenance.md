@@ -1,5 +1,13 @@
 # Template maintenance
 
+Version 0.16.4 makes all figure deliveries PNG-only: one final PNG per figure,
+no PDF/SVG, duplicate preview/review images or preview-only contact sheets.
+Built-in atlas, embedding, candidate marker and methylation QC producers follow
+this policy. Delivery audit and visual review use final PNGs; legacy manifests
+and their existing preview review records remain readable. Do not delete or
+reseal historical outputs during this upgrade. Runtime code changes require an
+idle executor and new plans; original data and numerical results are unchanged.
+
 Version 0.16.3 adds the explicit full-delivery gate `audit_delivery.py`, distributed
 to generated projects. It detects custom DAG omissions of publication comparison
 and summary, stale/missing visual reviews and incomplete multi-run Scanpy

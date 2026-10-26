@@ -58,7 +58,6 @@ def classify(counts, thresholds):
 
 def save(fig, out, name):
     fig.savefig(out / (name + '.png'), dpi=170, bbox_inches='tight')
-    fig.savefig(out / (name + '.pdf'), bbox_inches='tight')
     plt.close(fig)
 
 def main(spec_path, output):

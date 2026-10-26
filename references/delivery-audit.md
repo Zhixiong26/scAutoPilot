@@ -19,8 +19,8 @@ tables, dotplots, reports, etc.); the checker cannot infer promises from chat.
 
 The gate verifies signed task evidence and recorded outputs for all named runs,
 formal `figures_comparison` and dependent `workflow_summary`, requested route
-coverage, manifest hashes, atlas PNG/PDF/preview and individual panels, fresh
-visual review of all previews and at least one single panel, Scanpy cell-type
+coverage, manifest hashes, final atlas PNGs and individual panels, fresh
+visual review of all final atlas PNGs and at least one single panel, Scanpy cell-type
 panels and an executed notebook without recorded errors, optional annotation
 source/cell-count/H5AD binding, the results index and extra required artifacts.
 Inspect the actual images before recording review; never mark review passed to
