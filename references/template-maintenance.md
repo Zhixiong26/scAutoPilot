@@ -1,5 +1,15 @@
 # Template maintenance
 
+Version 0.16.1 fixes candidate annotation delivery: no-reference numerical output
+is explicitly `candidate_annotation_incomplete`, placeholder cell-type plots are
+suppressed, and the run inspector requests agent completion before delivery.
+`complete_scanpy_candidate.py` applies provenance-bound proposals without
+recomputing coordinates and exports a derived H5AD plus marker evidence for the
+existing embedding renderer. The agent still performs biological interpretation;
+no unattended annotation service is claimed. These runtime changes require new
+plans; preserve historical and active executors and use a new revision for old
+figures. Candidate delivery never grants biological approval.
+
 Version 0.16.0 implements categorized result roots in built-in/custom/QC planners,
 submission/execution checks and report links. New tools `result_paths.py` and
 `reserve_results.py` are distributed with the generator; generated AGENTS.md

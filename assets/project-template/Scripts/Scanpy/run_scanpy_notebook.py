@@ -466,11 +466,15 @@ def main() -> int:
         print("scanpy notebook failed; inspect %s" % summary["notebook"], file=sys.stderr)
         return 1
     if parameters["run_kind"] == "candidate":
-        print("candidate run finished; review the cluster evidence, then record the annotation and "
-              "re-run with run_kind: baseline:\n"
-              "  tools/record_annotation_review.py --project . --run-id %s --worksheet review.tsv\n"
-              "  tools/record_annotation_review.py --project . --run-id %s --mapping review.tsv"
-              % (args.run_id, args.run_id), file=sys.stderr)
+        if summary['annotation_status'] == 'candidate_annotation_incomplete':
+            print('Numerical analysis saved; candidate delivery awaits AGENT annotation. '
+                  'Interpret this run marker/QC evidence, export proposals with '
+                  'prepare_scanpy_candidate_reference.py, apply complete_scanpy_candidate.py, '
+                  'and render_embedding_revision.py on saved coordinates. '
+                  'Do not ask the user to annotate clusters or approve placeholders.', file=sys.stderr)
+        else:
+            print('Complete candidate labels are unapproved. Deliver the labelled figures '
+                  'for user review; a baseline rerun is not required for candidate delivery.', file=sys.stderr)
     return 0
 
 

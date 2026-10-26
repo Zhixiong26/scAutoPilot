@@ -116,6 +116,12 @@ alternatives and marker evidence, render the annotated candidate, and then
 request the user's review. `Unassigned` is not a finished candidate annotation.
 `tools/prepare_scanpy_candidate_reference.py` packages a completed run's worksheet
 as an unapproved, provenance-bound reference; it does not grant approval.
+Use `tools/complete_scanpy_candidate.py` to apply that reference to the saved
+analysis, then `tools/render_embedding_revision.py` to deliver complete labelled
+figures without rerunning clustering. This agent-owned completion is part of the
+requested Scanpy work, not a user prerequisite. `awaiting_agent_annotation` means
+continue marker interpretation and rendering; only complete proposals await user
+approval. Do not hand an all-placeholder image to the user for annotation.
 
 Never transplant numeric cluster mappings. `tools/record_annotation_review.py`
 binds a mapping to the source analysis signature and exact cluster set. Bind

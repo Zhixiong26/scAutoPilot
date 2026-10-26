@@ -333,6 +333,17 @@ class SourceAdapterTests(unittest.TestCase):
         self.assertTrue(all(len(row)==2 for k,rows in groups.items() if k.endswith('supervised') for row in rows))
         sources.verify()
 
+    def test_incomplete_candidate_omits_placeholder_celltype_panel(self):
+        run_dir, result, plan, spec = self.populate(('scanpy',))
+        path = result / 'scanpy/completion_summary.json'
+        summary = json.loads(path.read_text())
+        summary['annotation_status'] = 'candidate_annotation_incomplete'
+        write_json(path, summary)
+        sources = renderer.Sources(self.root, plan, spec)
+        groups, coverage, dmr = renderer.build_specs(self.root, plan, spec, sources)
+        self.assertEqual([p['column'] for p in groups['scanpy_ordinary'][0]], ['leiden', 'cohort'])
+        sources.verify()
+
     def test_supervised_skip_and_missing_weight(self):
         run_dir, result, plan, spec = self.populate(('methylvi_allcools',))
         sources=renderer.Sources(self.root,plan,spec); sources.context='methylvi_allcools_10'

@@ -8,6 +8,16 @@ RNA cell IDs use explicit `cell_id_prefix`. Preserve raw counts in `layers['coun
 
 A candidate run that ends at `Unassigned` is unfinished. It must provide a complete automatic proposal first; the user audits labels rather than performing the initial annotation.
 
+The notebook is the numerical producer, not a biological reasoning service.
+Without a complete reference or evidence-derived panels it saves marker/QC
+evidence with `candidate_annotation_incomplete`. It suppresses the placeholder
+cell-type UMAP; comparison delivery then contains cluster/sample diagnostics.
+The agent must continue from this checkpoint, rather than waiting for the user
+to supply labels or presenting computational completion as delivery completion.
+This is not an annotation-approval gate: render the full proposal first and label
+the delivery “awaiting user approval”. Low-confidence lineage/state proposals
+include alternatives and evidence; do not manufacture a precise subtype.
+
 Annotate by looking the markers up as they are. There is no bundled reference panel and no crosswalk to reuse: a label carried over from another project, from `Notebooks/example_ipf_scanpy.ipynb`, or from a fixed panel is exactly the transplant this workflow forbids. Establish each cluster's identity from its own ranked markers, its canonical lineage markers, and its QC and sample composition, and be able to say which genes carried the call.
 
 1. Run the `scanpy` task as a candidate. If `annotation.table` supplies non-placeholder labels for every analysed cell, the notebook uses exact cell-ID matches to render a complete candidate UMAP and records each cluster's majority label, purity, competing labels, and ranked markers. This remains unreviewed evidence even if the input table is marked approved for another downstream purpose.
@@ -39,6 +49,30 @@ approves a mapping. If selected as a later candidate's reference, declare the
 table through `annotation.table` with `review_status: pending`; the notebook
 matches cell IDs and measures disagreement against the new partition. Such a
 reference is dependent evidence and cannot validate itself.
+
+### Complete a saved candidate without numerical replay
+
+After exporting the reference, plan a custom DAG with two tasks:
+
+1. `complete_scanpy_candidate.py --project PROJECT --source-run SOURCE_RUN
+   --reference-dir PROJECT/Data/Annotation/REVISION --panels PANELS.json
+   --output {result_dir}/annotation --task-dir {task_dir}`. `PANELS.json` supplies
+   `cell_type_order`, a parallel `palette` list, and `dotplot_markers` keyed by
+   exactly those proposed labels. Derive these from this run's marker review.
+   The tool verifies source-task evidence, reference provenance, exact cell IDs
+   and cluster membership. It writes a new H5AD, marker dotplot/source tables,
+   confidence/evidence, and composition tables; approval remains false.
+2. Use `render_embedding_revision.py` on that declared H5AD, depending on the
+   first task. Include candidate cell type, confidence, Leiden, sample, condition
+   and QC panels. Its source declaration names the new producer task and digest.
+   Inspect the previews, record visual review, and link the complete revision at
+   the top of the results index. Preserve the original numerical artifacts.
+
+There is no requirement to rerun a baseline or obtain approval before producing
+these candidate figures. The helper applies evidence-based proposals; it does
+not autonomously infer labels inside a batch job. The active agent owns that
+step. If a user requested only job startup, explicitly state any remaining
+annotation work; a batch completion hook is not an unattended annotator.
 
 `Notebooks/scanpy_workflow.ipynb` is the implementation, not a copy of one: the DAG's scanpy task runs `run_scanpy_notebook.py`, which writes a parameter sidecar and executes that same notebook through a kernel, so there is one code path rather than a notebook and a batch script that must be kept in step. `Scripts/Scanpy/README.md` documents the full ten-step notebook flow, the verification loop, and the completion standard; `Scripts/Scanpy/Report.md` is the bilingual evidence ledger. `Notebooks/example_ipf_scanpy.ipynb` is a shipped worked example that the DAG never executes — including its reviewed cluster-to-cell-type mapping, which is valid only for that example's exact cluster set and must not be transplanted.
 

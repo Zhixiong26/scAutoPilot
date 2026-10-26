@@ -229,6 +229,17 @@ def inspect(project: Path, run_id: str) -> dict:
                                               if data.get("panels") or data.get("dmr_files") else "not_applicable")
         elif (run_dir / "figure_review.json").exists():
             result["visual_review_status"] = "stale"
+    scanpy_summary = Path(plan.get('result_dir') or run_dir) / 'scanpy/completion_summary.json'
+    if any(row['task'] == 'scanpy' and row['evidence_valid'] for row in task_rows) and scanpy_summary.is_file():
+        annotation = json.loads(scanpy_summary.read_text()).get('annotation_status')
+        result['annotation_status'] = annotation
+        if annotation == 'candidate_annotation_incomplete':
+            result['candidate_delivery_status'] = 'awaiting_agent_annotation'
+            result['next_action'] = 'Interpret saved markers/QC, complete_scanpy_candidate.py, then render_embedding_revision.py; do not request user approval before rendering complete proposals'
+            if result['status'] == 'complete':
+                result['status'] = 'awaiting_agent_annotation'
+        else:
+            result['candidate_delivery_status'] = 'awaiting_user_approval' if annotation != 'reviewed' else 'approved'
     if login_tasks:
         print("WARNING: %d task(s) of run %s executed on the host that submitted them, not on a "
               "compute node: %s" % (len(login_tasks), run_id, ", ".join(login_tasks)), file=sys.stderr)

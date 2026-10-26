@@ -262,9 +262,13 @@ def build_specs(root, plan, spec, source):
                 if len(sample_colors) < len(cohorts):
                     raise ValueError('Scanpy source sample palette absent')
                 colors['cohort_colors'] = sample_colors[:len(cohorts)]
+            incomplete = summary.get('annotation_status') == 'candidate_annotation_incomplete'
+            display_columns = ('leiden', 'cohort') if incomplete else (annotation, 'leiden', 'cohort')
+            if incomplete:
+                reasons[route].append('Cell-type delivery awaits agent marker interpretation and candidate rendering')
             rows = [make_panel(source, path, obs, coords, colors, 'X_umap_after_harmony', col,
                                task, route, '%s\n%s (%s)' % (task, col, summary['annotation_status']),
-                               summary['annotation_status']) for col in (annotation, 'leiden', 'cohort')]
+                               summary['annotation_status']) for col in display_columns]
         elif task.startswith('methscan_vmr_'):
             route, group = 'methscan_vmr', 'methscan_vmr_ordinary'
             directory = result / 'methscan/06_scanpy' / ('var_%s' % parameters['threshold'])
