@@ -62,6 +62,16 @@ can remain. Do not create empty subdirectories just to satisfy a template. A
 render-only revision may live within the source run's new publication revision;
 a separately scheduled render gets a new run under the same owning category.
 
+For one newly planned annotation revision, schedule related annotation, heatmap,
+overview, dotplot and publication-comparison tasks in the same DAG/root, with
+subdirectories for requested label systems and artifact roles. A separate render
+run, when necessary, is a linked supplement to the canonical annotation entry,
+not another final delivery. Do not duplicate competing methods by default. See
+[RNA cluster correlation](rna-reference-correlation.md). User-authorized retirement
+of a superseded method requires dependency checks, removal records, updated
+indexes and delivery validation; keep upstream files required by the selected
+method. Skill synchronization alone never authorizes deleting results.
+
 ## Figures everywhere
 
 Read [publication figures](publication-figures.md) before any plotting, including

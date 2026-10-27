@@ -28,6 +28,15 @@ Annotate by looking the markers up as they are. There is no bundled reference pa
 
 The profile is bound to this run's analysis signature and exact cluster set. Changes to signature-covered analysis parameters make it stale. Plumbing fields (`run_kind`, `iteration_id`, `analysis_confirmed`) are excluded from that signature; identical signatures and cluster numbers alone cannot prove identical cell membership after a numerical rerun. Cell-type DMR never consumes an unreviewed table: resolve low-confidence/mixed groups explicitly, retaining an inclusion/exclusion ledger for any derived DMR input.
 
+## External expression reference
+
+For annotating existing RNA clusters from an external expression atlas, follow
+[cluster Spearman reference annotation](rna-reference-correlation.md). This is
+the default expression-matching protocol; exact verified same-cell tables retain
+the ID-join route above. Keep marker review and candidate status. Plan one
+annotation delivery containing all requested label systems and figures; do not
+run a parallel kNN delivery unless explicitly requested.
+
 ## Candidate reference tool
 
 After completing this run's marker review, write a worksheet with `cluster`,

@@ -1,5 +1,16 @@
 # Template maintenance
 
+Version 0.16.6 fixes the default external RNA reference annotation protocol to
+query-cluster / reference-type Spearman correlation. It requires numbered
+heatmaps, marker review, complete figure/audit delivery and one canonical
+annotation entry with related outputs grouped within its run. Per-cell kNN is
+an explicit alternative, not a prerequisite. This is a documentation and
+generated AGENTS policy update, not a new built-in correlation executor.
+Existing frozen runtime signatures remain unchanged; project-specific adapters
+still require signed plans and validation. Never copy study-specific constants
+into the portable skill or delete historical results during synchronization.
+
+
 Version 0.16.5 fixes the RNA main-figure contract: integrated A–K overview,
 three markers per displayed annotation, explicit annotation level/state semantics,
 and single-line legends by default. New `audit_rna_overview.py` checks the exported

@@ -69,3 +69,18 @@ does not waive formal comparison, workflow summary or fresh visual review.
 See the skill's `references/delivery-audit.md`; report incomplete checks honestly.
 Read the installed/project-local scautopilot skill for execution and recovery;
 do not bypass compute-node execution guards or substitute wrappers for completion.
+
+## External RNA reference annotation
+
+For expression-based annotation of existing RNA clusters, follow the skill
+`references/rna-reference-correlation.md`: query-cluster versus reference-type
+mean log1p(CP10K) profiles, Spearman correlation, marker evidence, alternatives
+and confidence. Per-cell kNN requires explicit selection and is not a prerequisite.
+Preserve exact cells, clusters, scientific arrays and saved embeddings. Deliver
+numbered correlation heatmaps, A–K overview with three supported markers per
+displayed annotation, comparison and source tables, PNG-only, FOR REVIEW.
+Group requested label systems and all related figures under one newly planned
+annotation run; link necessary independent producers from one canonical entry.
+Register overviews and run delivery audits. Cleanup of superseded outputs needs
+user authorization, dependency checks and a removal record; never silently remove
+required upstream evidence or mutate frozen plans.

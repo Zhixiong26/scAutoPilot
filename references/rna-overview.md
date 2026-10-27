@@ -4,6 +4,10 @@ Use for a full RNA handoff or an explicitly requested integrated overview. A
 narrow appearance edit does not expand into a full analysis. User-specified
 layouts or marker counts override the defaults; record the chosen contract.
 
+External expression-reference annotations follow the
+[cluster correlation protocol](rna-reference-correlation.md), including numbered
+correlation heatmaps and one owning delivery root for related figures and tables.
+
 ## Main PNG and supporting figures
 
 Deliver one readable integrated PNG, with these panels on the same canvas:

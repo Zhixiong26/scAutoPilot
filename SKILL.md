@@ -92,6 +92,13 @@ scientific dependency. Follow the signed output and recovery contracts in
 
 ## Annotation and iterative decisions
 
+For external RNA reference annotation of existing clusters, use the
+[cluster Spearman protocol](references/rna-reference-correlation.md) by default:
+mean log-normalized query-cluster versus reference-type profiles, complete
+numbered heatmaps, marker review and one consolidated annotation delivery.
+Per-cell kNN is an explicitly selected alternative, not a prerequisite.
+
+
 For SeekGene method 2 or methylation read-depth QC, read
 [methylation reads QC](references/methylation-reads-qc.md). Use the portable
 opt-in diagnostic DAG; pin true per-barcode count sources, validate IDs, retain

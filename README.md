@@ -1,5 +1,7 @@
 # Single-cell Multiomics Analysis
 
+0.16.6：外部 RNA 参考注释默认按群平均表达做 Spearman 匹配；固定逐格数字热图、每类三基因点图和完整交付检查。同一注释版本的图表集中到一个交付入口，kNN 仅作为明确指定的备选方法。详见[群相关注释协议](references/rna-reference-correlation.md)。本次仅更新文档与项目规则，不修改历史运行器。
+
 0.16.0：新结果按 `Results/runs/<category>/<run-id>/` 自动分类；自定义 DAG 显式选择大类，探索任务共用路径工具。项目级 AGENTS.md 统一正式与探索绘图规范。此次含运行时代码变更，需新执行器和重新验证；历史路径及活动运行不迁移。详见[结果目录与绘图约定](references/result-layout.md)。
 
 0.15.5：整理 methylome 通用分析协议：[图谱与双模态对接](references/methylome-atlas.md)、[共享 marker 分层筛选/展示](references/methylome-markers.md)、[受试者层面疾病与同细胞关联](references/methylome-disease.md)、[四实现 benchmark](references/methylome-benchmark.md)。这是按需读取的分析与验收规范；未新增自动疾病模型或全规模 benchmark 执行器，不升级活动运行快照。
