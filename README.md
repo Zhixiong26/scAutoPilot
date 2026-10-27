@@ -1,5 +1,7 @@
 # Single-cell Multiomics Analysis
 
+0.16.7：完整 Scanpy 总图必须包含 doublet 四图（默认 UMAP 第三排）、注释/QC、组成及每类三基因点图。新计划在 summary 后自动检查交付；缺图、细胞不一致或视觉检查过期时阻止整批完成，数值分析不重复运行。此次修改运行器，历史计划不重写；详见[完整 RNA 图件协议](references/rna-overview.md)。
+
 0.16.6：外部 RNA 参考注释默认按群平均表达做 Spearman 匹配；固定逐格数字热图、每类三基因点图和完整交付检查。同一注释版本的图表集中到一个交付入口，kNN 仅作为明确指定的备选方法。详见[群相关注释协议](references/rna-reference-correlation.md)。本次仅更新文档与项目规则，不修改历史运行器。
 
 0.16.0：新结果按 `Results/runs/<category>/<run-id>/` 自动分类；自定义 DAG 显式选择大类，探索任务共用路径工具。项目级 AGENTS.md 统一正式与探索绘图规范。此次含运行时代码变更，需新执行器和重新验证；历史路径及活动运行不迁移。详见[结果目录与绘图约定](references/result-layout.md)。

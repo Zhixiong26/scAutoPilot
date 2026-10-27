@@ -34,10 +34,31 @@ def complete(root):
     write_json(result / 'scanpy/completion_summary.json', {'notebook': str(book)})
     (root / 'Results/RESULTS_INDEX.md').write_text('test delivery')
     record(root, 'test', 'passed', 'fixture', 'test image review', ['a.png', 'single_panels/a.png'])
+    from test_rna_overview import full_fixture
+    overview = result/'overview'; overview.mkdir()
+    full_fixture(overview)
+    write_json(root/'config/figure_delivery.json', {'rna_overview_manifests':[str(overview/'delivery_manifest.json')]})
     return run, result, plan, manifest
 
 
 class DeliveryAuditTests(unittest.TestCase):
+    def test_missing_overview_registration_fails_full_scanpy_delivery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); complete(root); (root/'config/figure_delivery.json').unlink()
+            self.assertIn('overview_requirements',audit(root,'test',['scanpy'])['failed_checks'])
+
+    def test_automatic_audit_records_failure_without_changing_task_evidence(self):
+        from audit_delivery import automatic_audit
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); run,result,plan,_=complete(root)
+            original=(run/'tasks/workflow_summary/task_status.json').read_bytes()
+            report=automatic_audit(root,plan)
+            self.assertEqual(report['status'],'complete',report)
+            (result/'overview/main.png').write_bytes(b'corrupt')
+            report=automatic_audit(root,plan)
+            self.assertEqual(report['status'],'incomplete')
+            self.assertEqual((run/'tasks/workflow_summary/task_status.json').read_bytes(),original)
+
     def test_project_overview_requirement_cannot_be_silently_omitted(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); complete(root)

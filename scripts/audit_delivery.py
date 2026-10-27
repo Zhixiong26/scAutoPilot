@@ -140,6 +140,7 @@ def audit(project, run_id, routes, source_runs=(), annotation_run=None, required
             require(isinstance(configured, list) and bool(configured), 'empty RNA overview requirements')
         names = list(overview_manifests) + configured
         require(all(isinstance(x, (str, Path)) and str(x).strip() for x in names), 'invalid overview manifest path')
+        require('scanpy' not in routes or bool(names), 'full Scanpy delivery requires an integrated RNA overview')
         return list(dict.fromkeys(str(x) for x in names))
     overviews = check('overview_requirements', overview_requirements)
     for name in overviews or []:
@@ -147,9 +148,9 @@ def audit(project, run_id, routes, source_runs=(), annotation_run=None, required
             from audit_rna_overview import validate_overview
             path = Path(name)
             path = (path if path.is_absolute() else root / path).resolve()
-            require(any(Path(plan['result_dir']).resolve() == path.parent for plan in plans.values()),
+            require(any(Path(plan['result_dir']).resolve() == path.parent or Path(plan['result_dir']).resolve() in path.parents for plan in plans.values()),
                     'overview producer must be a declared, evidence-valid --source-run')
-            return validate_overview(path)
+            return validate_overview(path, require_full=True)
         check('rna_overview:' + name, overview)
     check('results_index', lambda: artifact('Results/RESULTS_INDEX.md'))
     failures = [x for x in checks if x['status'] == 'failed']
@@ -157,6 +158,27 @@ def audit(project, run_id, routes, source_runs=(), annotation_run=None, required
             'source_runs': list(source_runs), 'annotation_run': annotation_run, 'requested_routes': list(routes),
             'status': 'incomplete' if failures else 'complete', 'checks': checks,
             'failed_checks': [x['check'] for x in failures], 'grants_biological_approval': False}
+
+
+def automatic_audit(project, plan):
+    """Called after a new RNA workflow summary; never reruns scientific tasks."""
+    root = Path(project).resolve()
+    run = root / '.workflow/runs' / plan['run_id']
+    config = root / 'config/figure_delivery.json'
+    try:
+        settings = read_json(config) if config.exists() else {}
+        # Multi-run bindings are per run, never an implicit project-wide substitute.
+        binding = settings.get('run_bindings', {}).get(plan['run_id'], {})
+        report = audit(root, binding.get('comparison_run', plan['run_id']), ['scanpy'],
+                       list(dict.fromkeys([plan['run_id']] + binding.get('source_runs', []))),
+                       binding.get('annotation_run'), binding.get('required', []),
+                       binding.get('overview_manifests', []))
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        report = {'status':'incomplete','failed_checks':['automatic_delivery_gate'], 'error':str(error)}
+    report['automatic_for_run'] = plan['run_id']
+    report['plan_sha256'] = sha(run/'plan.json')
+    write_json(run/'delivery_audit.json', report)
+    return report
 
 
 def main():

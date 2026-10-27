@@ -240,6 +240,14 @@ def inspect(project: Path, run_id: str) -> dict:
                 result['status'] = 'awaiting_agent_annotation'
         else:
             result['candidate_delivery_status'] = 'awaiting_user_approval' if annotation != 'reviewed' else 'approved'
+    if status == 'complete' and plan.get('delivery_contract') == 'rna_full_v1':
+        from audit_delivery import automatic_audit
+        full_delivery = automatic_audit(project, plan)
+        result['full_delivery_status'] = full_delivery['status']
+        result['delivery_audit'] = str(run_dir/'delivery_audit.json')
+        if full_delivery['status'] != 'complete':
+            result['status'] = 'awaiting_complete_delivery'
+            result['next_action'] = 'Complete integrated RNA overview, doublet diagnostics, source tables and visual review; rerun delivery audit without repeating science'
     if login_tasks:
         print("WARNING: %d task(s) of run %s executed on the host that submitted them, not on a "
               "compute node: %s" % (len(login_tasks), run_id, ", ".join(login_tasks)), file=sys.stderr)
@@ -254,7 +262,7 @@ def inspect(project: Path, run_id: str) -> dict:
         print("INFO: run %s was fully validated, but this project's selected routes read no ALLC "
               "files, so no methylation input was checked" % run_id, file=sys.stderr)
     write_json(run_dir / "run_summary.json", result)
-    if status == "complete":
+    if result["status"] == "complete":
         (run_dir / "workflow.COMPLETE").touch()
     else:
         marker = run_dir / "workflow.COMPLETE"

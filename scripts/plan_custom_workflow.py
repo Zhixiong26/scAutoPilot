@@ -44,6 +44,7 @@ def plan_custom(project, spec, run_id, category=None):
                    input_signature=pre['input_signature'], code_signature=pre['code_signature'],
                    runtime_identity=runtime_identity(root), plan_identity_version=2,
                    result_layout_version=2, result_category=category,
+                   delivery_contract="rna_full_v1" if category == "scanpy" else None,
                    result_dir=str(result_dir), tasks=tasks,
                    custom_task_spec=str(spec))
     write_json(run / 'preflight.json', pre); write_json(run / 'plan.json', payload)

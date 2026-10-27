@@ -98,7 +98,7 @@ Required delivery for each requested label system:
 - Correlation heatmap PNG with every finite cell annotated to two decimals,
   readable contrast, full row/column labels and a clearly explained best-match
   indicator. Undefined values show NA. Preserve the full-precision matrix TSV.
-- Integrated A–K overview including the marker dotplot, exactly three supported
+- Integrated full RNA overview including doublet diagnostics and the marker dotplot, exactly three supported
   genes per displayed annotation by default; preserve lineage order and single-line
   type names. Never invent markers to meet the count: resolve evidence gaps or
   report an incomplete delivery. See [RNA overview](rna-overview.md).

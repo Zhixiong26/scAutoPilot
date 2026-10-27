@@ -51,7 +51,8 @@ AnnData presentation metadata should use parallel `*_display_order` and
 ## RNA main figure
 
 For full RNA delivery use the [integrated overview contract](rna-overview.md),
-including its three-marker rule and executable audit. Narrow figure-only requests
+including integrated doublet diagnostics, its three-marker rule and executable
+audit. Doublet panels default to the third UMAP row; respect user row preferences. Narrow figure-only requests
 retain their requested scope; they do not require an unrelated full analysis.
 
 ## Panel requirements

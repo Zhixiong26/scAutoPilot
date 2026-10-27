@@ -30,12 +30,15 @@ def table(path):
     return labels, columns, values
 
 
-def validate_overview(manifest_path, markers_per_annotation=3):
+def validate_overview(manifest_path, markers_per_annotation=3, require_full=False):
     path = Path(manifest_path).resolve()
     root, data = path.parent, read_json(path)
     require(markers_per_annotation > 0, 'marker count must be positive')
     require(data['figure_format_policy'] == 'png_only', 'PNG-only policy missing')
-    require(data['panels'] == list('ABCDEFGHIJK'), 'complete A–K panels required')
+    full = data.get('delivery_contract') == 'rna_full_v1'
+    require(not require_full or full, 'full RNA overview with doublet diagnostics required')
+    expected = list('ABCDEFGHIJKLMNO') if full and data.get('doublet_diagnostics', {}).get('status') == 'performed' else list('ABCDEFGHIJK')
+    require(data['panels'] == expected, 'complete integrated RNA panels required')
     types = data['cell_type_order']
     require(bool(types) and len(types) == len(set(types)) == data['candidate_types'], 'annotation order/count mismatch')
     require(all(str(x).strip() and '\n' not in x and '\r' not in x for x in types), 'blank/wrapped annotation')
@@ -121,6 +124,8 @@ def validate_overview(manifest_path, markers_per_annotation=3):
     with exported('tables/panel_source.tsv').open(newline='') as stream:
         rows = list(csv.DictReader(stream, delimiter='\t'))
     require(len(rows) == data['cells'] and len({r['cell_id'] for r in rows}) == data['cells'], 'panel cell IDs/count mismatch')
+    if full:
+        validate_doublets(root, data, artifacts, rows)
     review = read_json(root / 'visual_review.json')
     require(review['status'] == 'passed' and review['manifest_sha256'] == sha(path), 'missing/stale visual review')
     require(bool(review['reviewer']) and bool(review['notes']) and main in review['inspected'], 'main PNG review missing')
@@ -131,14 +136,64 @@ def validate_overview(manifest_path, markers_per_annotation=3):
             'grants_biological_approval': False}
 
 
+FULL_ROLES = {'doublet_before', 'doublet_after', 'doublet_class', 'doublet_score',
+              'cell_type', 'leiden', 'sample', 'condition', 'confidence', 'total_counts',
+              'detected_genes', 'mitochondrial_percent', 'composition_condition',
+              'composition_sample', 'marker_dotplot'}
+
+
+def validate_doublets(root, data, artifacts, main_rows):
+    diagnostic = data['doublet_diagnostics']
+    roles = data['panel_roles']
+    require(set(roles) == set(data['panels']), 'panel role coverage mismatch')
+    if diagnostic['status'] == 'not_applicable':
+        require(bool(str(diagnostic.get('reason', '')).strip()) and
+                bool(str(diagnostic.get('decision_source', '')).strip()),
+                'doublet omission needs an explicit reason and decision source')
+        require(diagnostic['decision_source'] in data['source_sha256'], 'doublet decision source must be hash-bound')
+        require(len(roles) == 11 and set(roles.values()) == FULL_ROLES -
+                {'doublet_before','doublet_after','doublet_class','doublet_score'}, 'core RNA panel roles incomplete')
+        return
+    require(diagnostic['status'] == 'performed' and bool(diagnostic['method']), 'doublet method/status missing')
+    require(len(roles) == 15 and set(roles.values()) == FULL_ROLES, 'doublet/core RNA panel roles incomplete')
+    require(diagnostic.get('same_before_coordinates_for_class_and_score') is True and
+            diagnostic.get('cluster_numbers_are_independent') is True, 'doublet coordinate semantics missing')
+    def rows(key):
+        name = diagnostic[key]
+        require(name in artifacts, 'registered doublet source table required: ' + name)
+        with (root/name).open(newline='') as stream:
+            result = list(csv.DictReader(stream, delimiter='\t'))
+        require(bool(result) and len({x['cell_id'] for x in result}) == len(result), 'duplicate/empty doublet cell IDs')
+        for row in result:
+            require(all(math.isfinite(float(row[c])) for c in ['UMAP1','UMAP2']), 'nonfinite doublet coordinates')
+            require(bool(row['leiden'].strip()), 'missing doublet cluster')
+        return result
+    before, after = rows('before_table'), rows('after_table')
+    require(len(before) == diagnostic['before_cells'] and len(after) == diagnostic['after_cells'] == data['cells'],
+            'doublet cell counts mismatch')
+    calls, scores = diagnostic['class_column'], diagnostic['score_column']
+    singlet, doublet = diagnostic['singlet_label'], diagnostic['doublet_label']
+    require(singlet != doublet, 'singlet/doublet labels must differ')
+    require(all(x[calls] in [singlet,doublet] and math.isfinite(float(x[scores])) for x in before),
+            'invalid doublet calls/scores')
+    retained = {x['cell_id'] for x in before if x[calls] == singlet}
+    after_by_id = {x['cell_id']:x for x in after}
+    require(retained == set(after_by_id) == {x['cell_id'] for x in main_rows}, 'singlets/after/main cell IDs differ')
+    for row in main_rows:
+        other = after_by_id[row['cell_id']]
+        require(row['leiden'] == other['leiden'] and all(math.isclose(float(row[c]),float(other[c]),rel_tol=0,abs_tol=1e-6)
+                for c in ['UMAP1','UMAP2']), 'after/main clusters or coordinates differ')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--manifest', type=Path, required=True)
     parser.add_argument('--markers-per-annotation', type=int, default=3)
     parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--require-full', action='store_true', help='Require integrated doublet diagnostics and A–O panel coverage')
     args = parser.parse_args()
     try:
-        report = dict(status='complete', detail=validate_overview(args.manifest, args.markers_per_annotation))
+        report = dict(status='complete', detail=validate_overview(args.manifest, args.markers_per_annotation, args.require_full))
     except (OSError, ValueError, KeyError, TypeError, AssertionError, struct.error) as error:
         report = dict(status='incomplete', error=str(error))
     write_json(args.output, report)

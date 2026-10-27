@@ -1,5 +1,15 @@
 # Template maintenance
 
+Version 0.16.7 makes full automated RNA delivery mandatory: integrated A–O
+figure with doublet diagnostics in the third UMAP row, consistent singlet IDs
+and coordinates, source tables and visual review. New built-in/custom Scanpy
+plans freeze the contract; summary execution audits it and inspection blocks
+workflow completion until it passes. Numerical task success is preserved.
+The full audit now rejects missing overview registration; the scoped checker
+retains legacy A–K reading unless --require-full is requested. Runtime signatures
+change: deploy only to idle projects and create new plans; never rewrite frozen
+historical plans. Renderer layout remains agent-authored and must be inspected.
+
 Version 0.16.6 fixes the default external RNA reference annotation protocol to
 query-cluster / reference-type Spearman correlation. It requires numbered
 heatmaps, marker review, complete figure/audit delivery and one canonical

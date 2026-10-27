@@ -56,7 +56,46 @@ def seal(root, manifest):
         manifest_sha256=sha(root / 'delivery_manifest.json'), inspected={'main.png':sha(root / 'main.png')}))
 
 
+def full_fixture(root):
+    from audit_rna_overview import FULL_ROLES
+    manifest = fixture(root)
+    manifest.update(delivery_contract='rna_full_v1', panels=list('ABCDEFGHIJKLMNO'),
+                    panel_roles=dict(zip(list('ABCDEFGHIJKLMNO'), sorted(FULL_ROLES))))
+    manifest['doublet_diagnostics'] = dict(status='performed', method='fixture', before_cells=3, after_cells=2,
+        before_table='tables/before.tsv', after_table='tables/after.tsv', class_column='call',score_column='score',
+        singlet_label='singlet',doublet_label='doublet',cluster_numbers_are_independent=True,
+        same_before_coordinates_for_class_and_score=True)
+    (root/'tables/before.tsv').write_text('cell_id\tleiden\tUMAP1\tUMAP2\tcall\tscore\ncell1\t0\t0\t1\tsinglet\t0.1\ncell2\t1\t2\t3\tsinglet\t0.2\ncell3\t1\t3\t4\tdoublet\t0.9\n')
+    after='cell_id\tleiden\tUMAP1\tUMAP2\ncell1\t1\t0\t1\ncell2\t0\t2\t3\n'
+    (root/'tables/after.tsv').write_text(after); (root/'tables/panel_source.tsv').write_text(after)
+    seal(root,manifest)
+    return manifest
+
+
 class OverviewTests(unittest.TestCase):
+    def test_full_contract_rejects_legacy_and_accepts_complete_diagnostics(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); fixture(root)
+            with self.assertRaisesRegex(ValueError,'doublet diagnostics required'):
+                validate_overview(root/'delivery_manifest.json',require_full=True)
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); full_fixture(root)
+            self.assertEqual(validate_overview(root/'delivery_manifest.json',require_full=True)['cells'],2)
+
+    def test_full_contract_rejects_wrong_retained_cells_coordinates_and_roles(self):
+        for change in ['ids','coords','roles','calls','score']:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temp:
+                root=Path(temp); manifest=full_fixture(root)
+                if change=='roles': manifest['panel_roles']['A']='unknown_panel'
+                else:
+                    name='after.tsv' if change in ['ids','coords'] else 'before.tsv'
+                    file=root/'tables'/name; value=file.read_text()
+                    pairs={'ids':('cell2','wrong'),'coords':('cell1\t1\t0\t1','cell1\t1\t99\t1'),
+                           'calls':('singlet','uncertain'),'score':('0.1','nan')}
+                    a,b=pairs[change]; file.write_text(value.replace(a,b,1))
+                seal(root,manifest)
+                with self.assertRaises(ValueError): validate_overview(root/'delivery_manifest.json',require_full=True)
+
     def test_shared_genes_are_valid_without_claiming_specificity(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp); fixture(root)

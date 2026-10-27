@@ -21,7 +21,7 @@ Update `Results/RESULTS_INDEX.md` with verified paths, parameters and status.
 
 ## Figure contract, including exploration
 
-Full RNA handoff includes an integrated A–K main PNG: cell types, Leiden, samples,
+Full RNA handoff includes an integrated A–O main PNG: cell types, Leiden, samples,
 condition, confidence and three QC views; composition by condition/sample; and
 a marker dotplot. Use three evidence-supported genes per displayed annotation,
 export their mapping and mean/fraction tables, group related subtypes and keep
@@ -77,10 +77,22 @@ For expression-based annotation of existing RNA clusters, follow the skill
 mean log1p(CP10K) profiles, Spearman correlation, marker evidence, alternatives
 and confidence. Per-cell kNN requires explicit selection and is not a prerequisite.
 Preserve exact cells, clusters, scientific arrays and saved embeddings. Deliver
-numbered correlation heatmaps, A–K overview with three supported markers per
+numbered correlation heatmaps, full overview with doublet diagnostics and three supported markers per
 displayed annotation, comparison and source tables, PNG-only, FOR REVIEW.
 Group requested label systems and all related figures under one newly planned
 annotation run; link necessary independent producers from one canonical entry.
 Register overviews and run delivery audits. Cleanup of superseded outputs needs
 user authorization, dependency checks and a removal record; never silently remove
 required upstream evidence or mutate frozen plans.
+
+## Complete automated Scanpy figures
+
+Every full RNA delivery includes one integrated PNG: annotation UMAPs, QC,
+doublet diagnostics, composition and marker dotplot (three supported genes/type).
+Place doublet before/after/class/score in UMAP row three by default, or row two
+if requested. Keep layouts compact and readable. A separate doublet montage
+is not sufficient. Preserve originals when the user requests a new proposal.
+New `rna_full_v1` plans automatically audit after summary and cannot acquire
+workflow completion until full delivery and visual review pass; do not repeat
+completed science to repair figure omissions. Read references/rna-overview.md
+for the manifest, exact-cell checks and explicit not-applicable exception.

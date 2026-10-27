@@ -157,6 +157,12 @@ def main() -> int:
     write_json(task_dir / "task_status.json", state)
     if code == 0:
         (task_dir / "task.COMPLETE").touch()
+    if code == 0 and args.task == 'workflow_summary' and plan.get('delivery_contract') == 'rna_full_v1':
+        from audit_delivery import automatic_audit
+        delivery = automatic_audit(root, plan)
+        print('RNA delivery: ' + delivery['status'] + '; see ' + str(run_dir/'delivery_audit.json'))
+        # Task completion means numerical execution succeeded. inspect_run separately
+        # blocks workflow completion until the full figure/review audit passes.
     # Both success and handled failure publish a status; a failed task never
     # advertises unvalidated scientific files as completed artifacts.
     if code in (0, 1) or state['status'] == 'failed':

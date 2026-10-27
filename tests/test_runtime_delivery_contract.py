@@ -19,6 +19,7 @@ class RuntimeDeliveryContracts(unittest.TestCase):
             spec.write_text(json.dumps([{'name':'workflow_summary','profile':'summary'}]))
             result = plan_custom(root, spec, 'custom', 'scanpy')
             self.assertEqual(result['plan_identity_version'], 2)
+            self.assertEqual(result['delivery_contract'], 'rna_full_v1')
             self.assertTrue(result['runtime_identity'])
             self.assertEqual(result['tasks'][0]['outputs'], ['{task_dir}/task_outputs.json'])
             with self.assertRaisesRegex(WorkflowError, 'Preserve existing'):
@@ -26,6 +27,28 @@ class RuntimeDeliveryContracts(unittest.TestCase):
             external = Path(temp) / 'tasks.json'; external.write_text(spec.read_text())
             with self.assertRaisesRegex(WorkflowError, 'frozen under'):
                 plan_custom(root, external, 'external', 'scanpy')
+
+    def test_summary_hook_and_inspector_block_numerical_only_rna_delivery(self):
+        import subprocess,sys
+        from unittest.mock import patch
+        from inspect_run import inspect
+        with tempfile.TemporaryDirectory() as temp:
+            root=test_core.SkillTests().generate(Path(temp),'rna')
+            spec=root/'config/custom_tasks.json'
+            spec.write_text(json.dumps([{'name':'workflow_summary','profile':'summary'}]))
+            plan_custom(root,spec,'numeric_only','scanpy')
+            result=subprocess.run([sys.executable,str(root/'Scripts/Common/run_task.py'),
+                '--project',str(root),'--run-id','numeric_only','--task','workflow_summary'],
+                capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr)
+            run=root/'.workflow/runs/numeric_only'
+            report=json.loads((run/'delivery_audit.json').read_text())
+            self.assertEqual(report['status'],'incomplete')
+            self.assertIn('overview_requirements',report['failed_checks'])
+            self.assertTrue((run/'tasks/workflow_summary/task.COMPLETE').exists())
+            with patch('inspect_run.sacct_usage',return_value={}): summary=inspect(root,'numeric_only')
+            self.assertEqual(summary['status'],'awaiting_complete_delivery')
+            self.assertFalse((run/'workflow.COMPLETE').exists())
 
     def test_legacy_executor_is_rejected_without_mutation(self):
         with tempfile.TemporaryDirectory() as temp:
