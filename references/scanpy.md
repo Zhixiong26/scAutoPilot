@@ -1,100 +1,134 @@
-# Scanpy and Harmony
+# Scanpy: analysis, annotation and complete delivery
 
-The portable implementation accepts 10x directories, ZIP archives containing exactly one matrix, and 10x H5. Its legacy notebook performs per-sample QC, optional Scrublet, concatenation, normalization, HVG, PCA, optional Harmony, neighbours, UMAP, Leiden, markers, and guarded annotation. For new paired analyses follow [paired doublets](paired-doublets.md): compare Scrublet versus scDblFinder on identical per-capture inputs, select one RNA method, then reconcile with MethylScrublet before unified filtering. The legacy Scrublet path alone does not implement this policy and must not remove cells before DNAm scoring.
+## Start from the requested stage
 
-RNA cell IDs use explicit `cell_id_prefix`. Preserve raw counts in `layers['counts']` and log-normalized full-gene values in `raw`. An annotation profile is valid only when its analysis signature and expected cluster set match exactly.
+Read the project configuration, sample/capture metadata, selected source run,
+completion evidence and saved annotation before continuing. Preserve read-only
+RNA inputs and exact cell IDs (`cell_id_prefix` is explicit). New scientific
+work uses a signed DAG on a compute node; figure-only work reuses saved data.
+Do not rerun PCA, Harmony, neighbors, UMAP or Leiden to repair a figure.
 
-## The first pass auto-annotates
+The bundled notebook is the numerical Scanpy implementation for 10x directories,
+ZIPs containing one matrix and 10x H5. Its legacy detector is per-sample Scrublet;
+it is not an implementation of scDblFinder or joint RNA–DNAm doublet analysis.
+If the user selected scDblFinder, use a validated per-capture adapter and record
+its actual parameters/calls; never silently run legacy Scrublet instead. The
+capture unit is an independent capture reaction, not necessarily a donor/sample.
+For paired RNA–DNAm work, read [paired doublets](paired-doublets.md); RNA-only
+scope does not authorize methylation filtering. Preserve pre-filter counts,
+IDs, calls, scores and coordinate provenance needed for the final diagnostics.
 
-A candidate run that ends at `Unassigned` is unfinished. It must provide a complete automatic proposal first; the user audits labels rather than performing the initial annotation.
+Counts remain in the declared counts layer; document its gene universe. The
+full-gene log-normalized matrix remains in `raw` or another explicitly declared
+source. Do not imply an HVG-only counts layer contains full-gene counts.
+Runtime or input changes require validation and a new plan. Do not modify an
+active/frozen executor or infer current completeness from a Slurm exit code.
 
-The notebook is the numerical producer, not a biological reasoning service.
-Without a complete reference or evidence-derived panels it saves marker/QC
-evidence with `candidate_annotation_incomplete`. It suppresses the placeholder
-cell-type UMAP; comparison delivery then contains cluster/sample diagnostics.
-The agent must continue from this checkpoint, rather than waiting for the user
-to supply labels or presenting computational completion as delivery completion.
-This is not an annotation-approval gate: render the full proposal first and label
-the delivery “awaiting user approval”. Low-confidence lineage/state proposals
-include alternatives and evidence; do not manufacture a precise subtype.
+## Complete the annotation without waiting for the user
 
-Annotate by looking the markers up as they are. There is no bundled reference panel and no crosswalk to reuse: a label carried over from another project, from `Notebooks/example_ipf_scanpy.ipynb`, or from a fixed panel is exactly the transplant this workflow forbids. Establish each cluster's identity from its own ranked markers, its canonical lineage markers, and its QC and sample composition, and be able to say which genes carried the call.
+The notebook is a numerical producer, not an unattended biological annotator.
+A numerical checkpoint marked `candidate_annotation_incomplete` is unfinished
+agent work. Continue from saved markers/QC and complete a proposed annotation;
+do not deliver all-Unassigned plots or ask the user to supply the initial labels.
 
-1. Run the `scanpy` task as a candidate. If `annotation.table` supplies non-placeholder labels for every analysed cell, the notebook uses exact cell-ID matches to render a complete candidate UMAP and records each cluster's majority label, purity, competing labels, and ranked markers. This remains unreviewed evidence even if the input table is marked approved for another downstream purpose.
-2. If no complete cell-level reference is available, read `candidate_annotation_audit.tsv`, the per-cluster marker figure, QC, and sample composition. Automatically assign the best-supported biological label to every cluster, looking up unfamiliar markers when needed. Record low confidence and alternatives instead of using `Unassigned`.
-3. Write the proposed mapping and its confidence/evidence into a review worksheet or proposed profile, and write matching `markers.dotplot_markers` and `markers.cell_type_order` groups so the candidate annotation dotplot and legend use the same names.
-4. Deliver the fully coloured candidate UMAP and ask the user to audit the proposals, naming low-confidence or mixed clusters and the evidence behind them. Candidate labels must never be described as user-approved.
-5. After user approval or correction, bind approval to the exact annotation revision and exported cells, and record the reviewed cluster mapping with `tools/record_annotation_review.py`. A requested baseline rerun uses a new run ID, `run_kind: baseline` and `analysis_confirmed: true`; verify its actual partition before applying the mapping. A rerun is optional when the verified, explicitly approved derived cell table is the intended downstream input. See [handoff and review flags](iteration-practice.md#annotation-revisions-and-downstream-handoff) before enabling cell-type DMR.
+Choose the applicable evidence route:
 
-The profile is bound to this run's analysis signature and exact cluster set. Changes to signature-covered analysis parameters make it stale. Plumbing fields (`run_kind`, `iteration_id`, `analysis_confirmed`) are excluded from that signature; identical signatures and cluster numbers alone cannot prove identical cell membership after a numerical rerun. Cell-type DMR never consumes an unreviewed table: resolve low-confidence/mixed groups explicitly, retaining an inclusion/exclusion ledger for any derived DMR input.
+1. For a verified annotation of the same cells, join exact unique cell IDs with
+   coverage/provenance checks. Do not infer identity from similar barcode text.
+2. For an external RNA expression reference, use
+   [query-cluster to reference-type Spearman matching](rna-reference-correlation.md)
+   by default. Retain full numbered heatmaps, alternatives, confidence and marker
+   review. kNN is an explicitly selected alternative, not a prerequisite.
+3. Otherwise interpret this run's ranked markers, canonical lineage evidence,
+   QC and sample composition. Record the genes supporting each proposal and
+   preserve uncertainty. Never transplant numeric cluster-to-type mappings.
 
-## External expression reference
+Keep major types, subtypes and states separate. Stress/cycling labels describe
+states until lineage is supported; shared marker expression is not proof that
+PCA is defective. A major-type revision keeps subtype labels and a versioned
+mapping, then recomputes composition and marker summaries for the chosen level.
+Low-confidence proposals retain alternatives and review flags; they do not
+justify deleting cells. Complete candidate figures say FOR REVIEW.
 
-For annotating existing RNA clusters from an external expression atlas, follow
-[cluster Spearman reference annotation](rna-reference-correlation.md). This is
-the default expression-matching protocol; exact verified same-cell tables retain
-the ID-join route above. Keep marker review and candidate status. Plan one
-annotation delivery containing all requested label systems and figures; do not
-run a parallel kNN delivery unless explicitly requested.
-
-## Candidate reference tool
-
-After completing this run's marker review, write a worksheet with `cluster`,
-`cell_type`, `confidence`, `alternatives`, and `evidence` columns. Every observed
-cluster needs one non-placeholder label and nonempty confidence/evidence. Then:
+To package a marker-reviewed worksheet (`cluster`, `cell_type`, `confidence`,
+`alternatives`, `evidence`), use:
 
 ```bash
-"$PYTHON" "$PROJECT/tools/prepare_scanpy_candidate_reference.py" \
-  --project "$PROJECT" --run-id candidate-000 \
-  --worksheet "$PROJECT/config/candidate-000-proposals.tsv" \
-  --output-dir Data/Annotation/candidate-000-proposals
+python tools/prepare_scanpy_candidate_reference.py --project PROJECT \
+  --run-id SOURCE_RUN --worksheet PROJECT/config/proposals.tsv \
+  --output-dir Data/Annotation/REVISION
 ```
 
-The tool writes `cell_annotations.tsv` and `provenance.json` in a new directory,
-preserving cell order and marking all labels `agent_proposed_unapproved`. It
-checks source task evidence and exact cluster coverage, keeps marker evidence
-and records input/output hashes. It neither edits project configuration nor
-approves a mapping. If selected as a later candidate's reference, declare the
-table through `annotation.table` with `review_status: pending`; the notebook
-matches cell IDs and measures disagreement against the new partition. Such a
-reference is dependent evidence and cannot validate itself.
+Then plan `complete_scanpy_candidate.py` with the source run, reference directory
+and panel specification (ordered types, palette, three supported markers/type).
+It verifies exact cells/clusters and exports a derived H5AD, annotation evidence,
+marker/composition tables. Use `render_embedding_revision.py` for standard
+single panels when needed. **These helpers alone are not the full handoff.**
+Continue through the complete main figure, comparison, notebook and delivery
+checks below in the same annotation revision. Never require a baseline rerun
+just to deliver candidate figures.
 
-### Complete a saved candidate without numerical replay
+Biological approval is separate from layout/visual approval. Bind an actual
+annotation decision to the exact revision, source signature and cell membership
+using `record_annotation_review.py`; approving a picture does not approve DMR
+labels. See [downstream review flags](iteration-practice.md#annotation-revisions-and-downstream-handoff).
 
-After exporting the reference, plan a custom DAG with two tasks:
+## Fixed full RNA figure
 
-1. `complete_scanpy_candidate.py --project PROJECT --source-run SOURCE_RUN
-   --reference-dir PROJECT/Data/Annotation/REVISION --panels PANELS.json
-   --output {result_dir}/annotation --task-dir {task_dir}`. `PANELS.json` supplies
-   `cell_type_order`, a parallel `palette` list, and `dotplot_markers` keyed by
-   exactly those proposed labels. Derive these from this run's marker review.
-   The tool verifies source-task evidence, reference provenance, exact cell IDs
-   and cluster membership. It writes a new H5AD, marker dotplot/source tables,
-   confidence/evidence, and composition tables; approval remains false.
-2. Use `render_embedding_revision.py` on that declared H5AD, depending on the
-   first task. Include candidate cell type, confidence, Leiden, sample, condition
-   and QC panels. Its source declaration names the new producer task and digest.
-   Inspect the final PNGs, record visual review, and link the complete revision at
-   the top of the results index. Preserve the original numerical artifacts.
+Use [the authoritative overview contract](rna-overview.md) and shared
+`tools/rna_overview_layout.py`. The approved default is:
 
-There is no requirement to rerun a baseline or obtain approval before producing
-these candidate figures. The helper applies evidence-based proposals; it does
-not autonomously infer labels inside a batch job. The active agent owns that
-step. If a user requested only job startup, explicitly state any remaining
-annotation work; a batch completion hook is not an unattended annotator.
+| Row | Panels | Content |
+|---|---|---|
+| 1 | A–D | Cell type, Leiden, sample, condition |
+| 2 | E–H | Confidence, total counts, detected genes, mitochondrial percentage |
+| 3 | I–L | Before doublet removal, after removal, doublet class, doublet score |
+| 4 | M–N | Composition by condition and by sample |
+| 5 | O | Marker dotplot: three supported genes per displayed annotation |
 
-`Notebooks/scanpy_workflow.ipynb` is the implementation, not a copy of one: the DAG's scanpy task runs `run_scanpy_notebook.py`, which writes a parameter sidecar and executes that same notebook through a kernel, so there is one code path rather than a notebook and a batch script that must be kept in step. `Scripts/Scanpy/README.md` documents the full ten-step notebook flow, the verification loop, and the completion standard; `Scripts/Scanpy/Report.md` is the bilingual evidence ledger. `Notebooks/example_ipf_scanpy.ipynb` is a shipped worked example that the DAG never executes — including its reviewed cluster-to-cell-type mapping, which is valid only for that example's exact cluster set and must not be transplanted.
+Keep the canvas compact, square equal-unit UMAP axes, consistent palettes and
+lineage-grouped single-line labels. The default 32×27 inch, 300-dpi canvas gives
+9600×8100 pixels; the shared helper expands for more types/genes/samples or long
+labels while retaining the same row order. Do not invent study names, counts,
+markers or sample identities. Only an explicit later user request changes this
+layout; record any override as a separately scoped delivery until validated.
 
-## Figure standard
+Export one final PNG per figure, including required individual panels; no PDF,
+SVG, preview/review duplicate PNGs or thumbnail/contact-sheet substitutes.
+`Scripts/Common/embedding_plot.py:save_embedding()` exports individual UMAPs at
+8×8 inches, 300 dpi, 2400×2400, with outside single-column legends and vertical
+numeric colour bars. Its default `wrap_legend=False` keeps labels single-line;
+do not restore old wrapping behavior. Main canvases use the shared overview
+layout, not the square single-panel exporter. Check text/legend collisions
+visually and grow the available space rather than hiding/truncating labels.
 
-All intermediate, candidate, baseline and publication UMAPs use the shared `Scripts/Common/embedding_plot.py` helper. `save_embedding(figure, path)` exports an **8 × 8 in square canvas**, including its legend, at **300 dpi (2400 × 2400 px PNG)**. Do not generate PDF/SVG or duplicate preview/review images. Never use `bbox_inches='tight'` for these exports: a tight crop changes the canvas shape. The helper overrides even a global `savefig.bbox='tight'` setting.
+## One delivery and an executable completion gate
 
-Single-panel axes remain 4 × 4 in; comparison figures fit smaller square panels into the same canvas (two panels are stacked at 3.04 × 3.04 in each; larger comparisons use a grid). Construction and export both use the shared `panel_positions()` rule; the notebook's `figure-standard` cell imports helpers, rather than defining another geometry. `square_panels()` first gives before/after views a common data window; the shared exporter preserves that window and equal aspect without stretching coordinates. Compare like-for-like single panels across rounds rather than a single plot to a smaller overview panel.
+Plan annotation, source tables, heatmaps, overview and comparison together under
+`Results/runs/scanpy/<run-id>/`; use subdirectories for label systems and artifact
+roles. Necessary independent producers remain explicit source dependencies.
+A later rendering run is a supplement linked from one canonical annotation
+entry. User-approved pure appearance edits can overwrite figures with updated
+hashes/review; when the user requests a new proposal, preserve the original.
 
-Categorical legends use **one vertical column on the right**, preserving colours and category order; long display labels wrap and crowded legends reduce font size. Continuous colour bars use **one vertical bar per numerical panel**, outside its square axes. If a comparison cannot fit readable keys, export its panels separately; do not silently add a second legend column or clip labels. Numeric Leiden labels placed on the data are unchanged. Dotplots, heatmaps and non-embedding QC charts retain content-appropriate layouts.
+The main manifest declares `rna_full_v2`, exact panel roles, actual geometry,
+source hashes, marker and composition tables, doublet calls/coordinates and
+visual review. `audit_rna_overview.py --require-full` checks the fixed layout,
+actual PNG DPI/dimensions, marker triplets and exact before/after/main cell IDs.
+`audit_delivery.py --routes scanpy` also requires valid producer evidence,
+formal publication comparison, executed notebook, summary and current index.
+A three-panel comparison atlas is supplementary and cannot replace the main PNG.
 
-The same exporter is required in manually authored final/publication rendering helpers. Do not change scientific coordinates, clustering, labels or palettes just to achieve this layout. The shared Python source is part of `code_signature`; adopting it in an existing generated project requires a fresh plan and validation, not overwriting an in-flight run. Updating this skill does not retroactively redraw existing outputs.
+New built-in and custom Scanpy plans freeze this contract. Summary execution
+automatically audits delivery, and `inspect_run.py` leaves the workflow at
+`awaiting_complete_delivery` until the gate passes. Completed numerical tasks
+remain completed. Continue agent annotation/rendering/review rather than
+repeating science or calling incomplete outputs complete. Per-run overview
+bindings override project display pointers so an unrelated old figure cannot
+become a compulsory dependency. See [delivery audit](delivery-audit.md).
 
-## Batch comparison
-
-The comparison task reads the completion summary annotation_key and its declared h5ad. Candidate labels remain candidate_cell_type; reviewed labels use cell_type. The sample field is cohort and the coordinate basis is X_umap_after_harmony. See [batch delivery](figures-comparison.md) for the atlas canvas exception, source colours and visual review.
+The shared helper supplies layout, not biological interpretation or a universal
+renderer for arbitrary input schemas. A project adapter must populate it from
+verified saved data, export actual geometry and source tables, and inspect final
+PNGs. Missing metadata/markers or unavailable pre-filter data remain explicit
+unfinished work; do not fabricate panels to silence the gate.

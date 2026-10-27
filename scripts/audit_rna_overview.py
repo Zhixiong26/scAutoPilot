@@ -35,8 +35,9 @@ def validate_overview(manifest_path, markers_per_annotation=3, require_full=Fals
     root, data = path.parent, read_json(path)
     require(markers_per_annotation > 0, 'marker count must be positive')
     require(data['figure_format_policy'] == 'png_only', 'PNG-only policy missing')
-    full = data.get('delivery_contract') == 'rna_full_v1'
-    require(not require_full or full, 'full RNA overview with doublet diagnostics required')
+    full = data.get('delivery_contract') in ('rna_full_v1', 'rna_full_v2')
+    fixed = data.get('delivery_contract') == 'rna_full_v2'
+    require(not require_full or fixed, 'full RNA overview with doublet diagnostics required (fixed rna_full_v2 layout)')
     expected = list('ABCDEFGHIJKLMNO') if full and data.get('doublet_diagnostics', {}).get('status') == 'performed' else list('ABCDEFGHIJK')
     require(data['panels'] == expected, 'complete integrated RNA panels required')
     types = data['cell_type_order']
@@ -77,6 +78,8 @@ def validate_overview(manifest_path, markers_per_annotation=3, require_full=Fals
         require(all(x > 0 for x in pixels), 'empty PNG dimensions')
         if name == main:
             require(pixels == data['pixels'], 'main PNG dimensions mismatch')
+            if fixed:
+                require(png_dpi(root/name) == 300, 'main PNG must encode 300 DPI')
         if name.startswith('single_panels/'):
             require(pixels == [2400, 2400], 'individual embedding must be 2400x2400')
     require(any(x.startswith('single_panels/') and x.endswith('.png') for x in artifacts), 'individual UMAPs missing')
@@ -124,6 +127,9 @@ def validate_overview(manifest_path, markers_per_annotation=3, require_full=Fals
     with exported('tables/panel_source.tsv').open(newline='') as stream:
         rows = list(csv.DictReader(stream, delimiter='\t'))
     require(len(rows) == data['cells'] and len({r['cell_id'] for r in rows}) == data['cells'], 'panel cell IDs/count mismatch')
+    if fixed:
+        from rna_overview_layout import validate_layout
+        validate_layout(data)
     if full:
         validate_doublets(root, data, artifacts, rows)
     review = read_json(root / 'visual_review.json')
@@ -183,6 +189,23 @@ def validate_doublets(root, data, artifacts, main_rows):
         other = after_by_id[row['cell_id']]
         require(row['leiden'] == other['leiden'] and all(math.isclose(float(row[c]),float(other[c]),rel_tol=0,abs_tol=1e-6)
                 for c in ['UMAP1','UMAP2']), 'after/main clusters or coordinates differ')
+
+
+def png_dpi(path):
+    with path.open('rb') as stream:
+        stream.read(8)
+        while True:
+            header = stream.read(8)
+            if len(header) != 8:
+                return None
+            length,kind = struct.unpack('>I4s',header)
+            if kind == b'pHYs':
+                require(length == 9, 'invalid PNG resolution chunk')
+                x,y,unit = struct.unpack('>IIB',stream.read(9))
+                return round(x*.0254) if unit == 1 and x == y else None
+            if kind in (b'IDAT', b'IEND'):
+                return None
+            stream.seek(length+4,1)
 
 
 def main():

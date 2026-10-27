@@ -269,3 +269,8 @@ sampling rule; record common-cell versus full-cohort comparisons when population
 differ. Keep the selected incumbent explicit instead of promoting the latest run.
 Network-only review retries belong in supplemental hash-bound records; never
 overwrite a frozen failed/degraded round or apply its fallback after escalation.
+
+Full delivery of the selected Scanpy result follows the fixed
+[compact A–O layout](rna-overview.md): doublet diagnostics in row three,
+composition and three-marker dotplot below. Internal search diagnostics are
+not themselves full handoffs; incomplete agent work must remain explicit.

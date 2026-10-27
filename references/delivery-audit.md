@@ -17,7 +17,7 @@ binding supports `complete_scanpy_candidate.py`'s derived delivery contract.
 Repeat `--require` for every additional promised file (complete notebook, marker
 tables, dotplots, reports, etc.); the checker cannot infer promises from chat.
 For full RNA handoff also pass `--overview-manifest` for the integrated A–O
-main figure, or register it in project `config/figure_delivery.json` under
+main figure, or, when no explicit per-run manifest is supplied, register it in project `config/figure_delivery.json` under
 `rna_overview_manifests`. The checker then automatically applies the
 [RNA overview contract](rna-overview.md), including three markers per annotation,
 source-table arithmetic, PNG inventory and a fresh main-figure visual review.
@@ -45,7 +45,7 @@ off the complete bundle. No unnecessary numerical recomputation is required.
 
 ## Mandatory complete RNA figure gate (0.16.7)
 
-`audit_delivery.py --routes scanpy` requires a registered `rna_full_v1` overview,
+`audit_delivery.py --routes scanpy` requires a registered `rna_full_v2` overview,
 even if figure_delivery.json is absent. Follow [the RNA manifest contract](rna-overview.md).
 The main PNG includes doublet diagnostics, annotation/QC, composition and marker
 dotplot. Missing overview registration, missing doublet source tables, inconsistent
@@ -58,3 +58,7 @@ complete. Agent work continues through marker interpretation, rendering and
 visual review. Existing plans are not silently rewritten. A scoped figure
 proposal can be checked with `audit_rna_overview.py --require-full`; this does
 not claim that a new numerical DAG ran or grant biological approval.
+
+Explicit `--overview-manifest` / run-binding manifests take precedence over the
+project overview pointer. This isolates a selected delivery from unrelated
+historical views; it does not waive producer or source validation.

@@ -1,4 +1,5 @@
 """Reject incomplete marker panels and stale/contradictory overview evidence."""
+from functools import lru_cache
 import csv
 import json
 from pathlib import Path
@@ -14,10 +15,12 @@ from figures_comparison_evidence import sha
 from _common import write_json
 
 
-def png(width, height):
+@lru_cache(maxsize=8)
+def png(width, height, dpi=300):
     def chunk(kind, data):
         return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data) & 0xffffffff)
     return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', width, height, 8, 0, 0, 0, 0))
+            + chunk(b'pHYs', struct.pack('>IIB', round(dpi/.0254), round(dpi/.0254), 1))
             + chunk(b'IDAT', zlib.compress((b'\0' * (width + 1)) * height)) + chunk(b'IEND', b''))
 
 
@@ -57,10 +60,15 @@ def seal(root, manifest):
 
 
 def full_fixture(root):
-    from audit_rna_overview import FULL_ROLES
+    from rna_overview_layout import geometry
     manifest = fixture(root)
-    manifest.update(delivery_contract='rna_full_v1', panels=list('ABCDEFGHIJKLMNO'),
-                    panel_roles=dict(zip(list('ABCDEFGHIJKLMNO'), sorted(FULL_ROLES))))
+    spec=geometry(2,5,1,max(map(len,manifest['cell_type_order'])))
+    width,height=spec['canvas_inches']
+    spec['axes_bounds']={k:[x/width,y/height,w/width,h/height] for k,(x,y,w,h) in spec['axes_inches'].items()}
+    pixels=[round(width*300),round(height*300)]
+    (root/'main.png').write_bytes(png(*pixels))
+    manifest.update(delivery_contract='rna_full_v2', panels=list('ABCDEFGHIJKLMNO'),
+                    samples=1, pixels=pixels, layout=spec, panel_roles=spec['panel_roles'].copy())
     manifest['doublet_diagnostics'] = dict(status='performed', method='fixture', before_cells=3, after_cells=2,
         before_table='tables/before.tsv', after_table='tables/after.tsv', class_column='call',score_column='score',
         singlet_label='singlet',doublet_label='doublet',cluster_numbers_are_independent=True,
@@ -95,6 +103,35 @@ class OverviewTests(unittest.TestCase):
                     a,b=pairs[change]; file.write_text(value.replace(a,b,1))
                 seal(root,manifest)
                 with self.assertRaises(ValueError): validate_overview(root/'delivery_manifest.json',require_full=True)
+
+    def test_fixed_layout_rejects_reordered_roles_axes_and_wrong_png_dpi(self):
+        for change in ['role_order','row_order','axes_size','dpi']:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temp:
+                root=Path(temp); manifest=full_fixture(root)
+                if change=='role_order':
+                    roles=manifest['panel_roles']; roles['A'],roles['I']=roles['I'],roles['A']
+                elif change=='row_order':
+                    axes=manifest['layout']['axes_bounds']; axes['A'],axes['I']=axes['I'],axes['A']
+                elif change=='axes_size': manifest['layout']['axes_bounds']['A'][2] *= .8
+                else: (root/'main.png').write_bytes(png(*manifest['pixels'],dpi=150))
+                seal(root,manifest)
+                with self.assertRaises(ValueError): validate_overview(root/'delivery_manifest.json',require_full=True)
+
+    def test_shared_canvas_adapts_without_changing_third_row(self):
+        from rna_overview_layout import create_canvas,record_layout,geometry
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        for counts in [(16,48,9,31),(30,90,20,55)]:
+            fig,axes,spec=create_canvas(*counts)
+            record=record_layout(fig,axes,spec)
+            self.assertEqual(spec['panel_roles']['I'],'doublet_before')
+            self.assertGreater(record['axes_bounds']['A'][1],record['axes_bounds']['E'][1])
+            self.assertGreater(record['axes_bounds']['E'][1],record['axes_bounds']['I'][1])
+            self.assertGreater(record['axes_bounds']['I'][1],record['axes_bounds']['M'][1])
+            self.assertEqual(len(axes),15)
+            plt.close(fig)
+        self.assertEqual(geometry(16,48,9,31)['canvas_inches'],[32.,27.])
 
     def test_shared_genes_are_valid_without_claiming_specificity(self):
         with tempfile.TemporaryDirectory() as temp:

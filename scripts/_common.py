@@ -1171,6 +1171,8 @@ def run_record_lines(summary: Dict[str, Any], stage: Optional[str] = None) -> Li
         if not tasks:
             return []
         status = _stage_status(tasks)
+        if stage == "Scanpy" and status == "complete" and summary.get("full_delivery_status") == "incomplete":
+            status = "awaiting_complete_delivery"
     total = len(tasks)
     # Completion is proven by validated evidence, not by a scheduler state:
     # a not_submitted task and a marker-only task are both unfinished.
@@ -1188,6 +1190,11 @@ def run_record_lines(summary: Dict[str, Any], stage: Optional[str] = None) -> Li
         "- Input signature / 输入签名：`%s`" % (signature if signature else "unknown"),
         "- Evidence / 证据：`.workflow/runs/%s/run_summary.json`" % run_id,
     ]
+    if "full_delivery_status" in summary and stage in (None, "Scanpy"):
+        lines.extend([
+            "- Full RNA delivery / 完整 RNA 交付：`%s`" % summary["full_delivery_status"],
+            "- Delivery audit / 交付检查：`%s`" % summary.get("delivery_audit", "not recorded"),
+        ])
     if "figure_delivery_status" in summary:
         lines.extend([
             "- Figure delivery / 图集：`%s`; visual review / 视觉审核：`%s`"

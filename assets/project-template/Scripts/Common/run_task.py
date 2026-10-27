@@ -157,7 +157,7 @@ def main() -> int:
     write_json(task_dir / "task_status.json", state)
     if code == 0:
         (task_dir / "task.COMPLETE").touch()
-    if code == 0 and args.task == 'workflow_summary' and plan.get('delivery_contract') == 'rna_full_v1':
+    if code == 0 and args.task == 'workflow_summary' and plan.get('delivery_contract') in ('rna_full_v1', 'rna_full_v2'):
         from audit_delivery import automatic_audit
         delivery = automatic_audit(root, plan)
         print('RNA delivery: ' + delivery['status'] + '; see ' + str(run_dir/'delivery_audit.json'))

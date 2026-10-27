@@ -22,7 +22,8 @@ Update `Results/RESULTS_INDEX.md` with verified paths, parameters and status.
 ## Figure contract, including exploration
 
 Full RNA handoff includes an integrated A–O main PNG: cell types, Leiden, samples,
-condition, confidence and three QC views; composition by condition/sample; and
+condition, confidence and three QC views; four doublet panels in row three;
+composition by condition/sample; and
 a marker dotplot. Use three evidence-supported genes per displayed annotation,
 export their mapping and mean/fraction tables, group related subtypes and keep
 each name on one line. Record the annotation level; major-type merging is an
@@ -89,10 +90,10 @@ required upstream evidence or mutate frozen plans.
 
 Every full RNA delivery includes one integrated PNG: annotation UMAPs, QC,
 doublet diagnostics, composition and marker dotplot (three supported genes/type).
-Place doublet before/after/class/score in UMAP row three by default, or row two
-if requested. Keep layouts compact and readable. A separate doublet montage
+Place doublet before/after/class/score in UMAP row three. A later explicit
+user override needs a recorded alternative layout and corresponding validation. Keep layouts compact and readable. A separate doublet montage
 is not sufficient. Preserve originals when the user requests a new proposal.
-New `rna_full_v1` plans automatically audit after summary and cannot acquire
+New `rna_full_v2` plans automatically audit after summary and cannot acquire
 workflow completion until full delivery and visual review pass; do not repeat
 completed science to repair figure omissions. Read references/rna-overview.md
 for the manifest, exact-cell checks and explicit not-applicable exception.

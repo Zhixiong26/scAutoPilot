@@ -23,6 +23,8 @@ def audit(project):
     for name in ('runtime_identity', 'seal_recorded_outputs', 'update_results_index', 'validate_plan_result', 'automatic_audit'):
         if name not in calls:
             errors.append('Deployed run_task.py lacks %s; freeze a maintained runtime in a NEW run' % name)
+    if not (root / 'tools/rna_overview_layout.py').is_file():
+        errors.append('Shared rna_overview_layout.py is missing; deploy maintained full RNA layout')
     if not (root / 'tools/result_paths.py').is_file():
         errors.append('Categorized result_paths.py is missing; freeze a maintained runtime')
     if not (root / 'Scripts/Common/embedding_plot.py').is_file():

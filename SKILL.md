@@ -198,7 +198,9 @@ For a full RNA handoff, follow the [RNA overview contract](references/rna-overvi
 one integrated A–O main PNG with doublet diagnostics in the third UMAP row,
 three evidence-supported markers per displayed
 annotation, grouped single-line legends, source tables and hash-bound visual
-review. Use `audit_rna_overview.py` and bind the overview into `audit_delivery.py`.
+review. Build its fixed geometry with `rna_overview_layout.py:create_canvas()`
+and record actual axes with `record_layout()`. Use `audit_rna_overview.py
+--require-full` and bind the overview into `audit_delivery.py`.
 All new automated Scanpy plans require the complete integrated figure. The
 summary executor automatically audits delivery; the inspector blocks workflow
 completion on missing figures, mismatched cell IDs or stale review.

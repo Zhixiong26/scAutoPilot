@@ -1,5 +1,15 @@
 # Template maintenance
 
+Version 0.16.8 consolidates the Scanpy workflow and approved compact A–O
+layout. A distributed `rna_overview_layout.py` supplies geometry and records
+actual axes; `rna_full_v2` checks exact role order/positions and PNG resolution.
+Explicit per-run overview bindings override project display pointers. Root and
+Scanpy-stage reports preserve incomplete full-delivery status even when numerical
+tasks succeeded. Legacy
+wrapping, two-task-only handoff and flat-path wording are corrected. Runtime
+signatures change; deploy only to idle runtimes and use new validated plans.
+Layout approval is distinct from biological annotation approval.
+
 Version 0.16.7 makes full automated RNA delivery mandatory: integrated A–O
 figure with doublet diagnostics in the third UMAP row, consistent singlet IDs
 and coordinates, source tables and visual review. New built-in/custom Scanpy

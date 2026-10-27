@@ -4,32 +4,48 @@ This file describes the long-lived objectives, boundaries and verification rules
 
 本文件面向执行该分析的人或自动化 skill，描述长期稳定的目标、边界和验证规则。运行状态、失败证据和修正记录写入 `Report.md`，不要在两处重复维护易变化的参数。
 
+
+## Current full-delivery requirement / 当前完整交付要求
+
+The notebook below describes the legacy numerical backend, including Scrublet;
+it does not override a user-selected scDblFinder adapter. Read the project skill
+`references/scanpy.md` and `references/rna-overview.md` for the complete workflow.
+Every automated full RNA handoff includes one compact A–O PNG: A–D annotation,
+E–H confidence/QC, I–L doublet diagnostics in row three, M–N composition, O marker
+dotplot with three supported genes/type. Use `tools/rna_overview_layout.py`;
+single-line grouped legends, PNG only, no duplicate preview/PDF. Save actual
+geometry, sources and visual review. Numerical notebook success alone does not
+complete delivery; new `rna_full_v2` plans enforce the full audit.
+
+默认完整交付为五排总图，doublet 四图固定第三排；缺图、缺 marker、坐标/细胞
+不一致或过期审图记录均不算完成。无需重跑已完成数值分析来修补排版。
+
 ## Scope / 适用范围
 
-Sole analysis entry point / 唯一分析入口：
+Bundled numerical entry point / 内置数值分析入口：
 
 - `Notebooks/<notebook>.ipynb`（打包入口 / packaged entry: `Notebooks/scanpy_workflow.ipynb`）
 
-The notebook reads the 10x filtered matrices of the samples declared by the sample manifest and performs QC, Scrublet, normalization, HVG, PCA, Harmony, neighbour graph, UMAP, Leiden, markers, manual annotation and result export. `CYL` / `ZCP` are example sample labels (示例/example) that illustrate the manifest; they are not defaults.
+The notebook reads the 10x filtered matrices of the samples declared by the sample manifest and performs QC, Scrublet, normalization, HVG, PCA, Harmony, neighbour graph, UMAP, Leiden, markers, agent-proposed annotation with human review and result export. `CYL` / `ZCP` are example sample labels (示例/example) that illustrate the manifest; they are not defaults.
 
-该 Notebook 负责读取样本清单声明的 RNA 10x filtered matrices（示例样本名 / example sample labels: `CYL`、`ZCP`），完成 QC、Scrublet、归一化、HVG、PCA、Harmony、邻接图、UMAP、Leiden、marker、人工注释和结果导出。
+该 Notebook 负责读取样本清单声明的 RNA 10x filtered matrices（示例样本名 / example sample labels: `CYL`、`ZCP`），完成 QC、Scrublet、归一化、HVG、PCA、Harmony、邻接图、UMAP、Leiden、marker、自动候选注释与人工复核和结果导出。
 
-Not part of the current workflow / 以下内容不属于当前工作流：standalone Python scripts, Slurm wrappers, results from historical scripts, and cluster-number mappings belonging to other projects. 独立 Python 脚本、Slurm wrapper、历史脚本结果和其他项目的 cluster 编号映射。
+Validated project adapters may implement selected scDblFinder, external cluster-correlation annotation and complete figure delivery through the signed custom DAG. Scheduler wrappers alone do not prove completion. Never transplant another run’s numeric cluster mappings. 经验证的项目适配器可实现已选 scDblFinder、群相关注释及完整交付；使用同一签名 DAG 与证据规则。
 
-Run root / 运行根目录：`Results/runs/<run-id>/`。Below, `Results/Scanpy/<run-id>/` denotes the Scanpy output directory of that run（下文 `Results/Scanpy/<run-id>/` 表示该运行下的 Scanpy 输出目录）。
+Run root / 运行根目录：`Results/runs/scanpy/<run-id>/`。Below, `Results/runs/scanpy/<run-id>/scanpy/` denotes the Scanpy output directory of that run（下文 `Results/runs/scanpy/<run-id>/scanpy/` 表示该运行下的 Scanpy 输出目录）。
 
 ## Invariants and permission boundaries / 不变量与权限边界
 
 - Inputs are the RNA matrices declared by the sample manifest (`rna_path` / `rna_format`; source example: project `Data/Matrix/`), read-only during the analysis.
   输入为样本清单声明的 RNA 矩阵（`rna_path` / `rna_format`；来源示例 / source example: 项目 `Data/Matrix/`），分析期间只读。
-- Formal outputs live in `Results/Scanpy/<run-id>/`, where `<run-id>` identifies this run. 正式输出位于 `Results/Scanpy/<run-id>/`，`<run-id>` 为本轮运行的标识。
+- Formal outputs live in `Results/runs/scanpy/<run-id>/scanpy/`, where `<run-id>` identifies this run. 正式输出位于 `Results/runs/scanpy/<run-id>/scanpy/`，`<run-id>` 为本轮运行的标识。
 - The original integer expression is preserved in `layers['counts']` of the downstream HVG work object; the full-gene log-normalized expression is preserved in `raw`. If whole-gene raw counts are needed later, the save interface must be extended separately.
   原始整数表达在下游 HVG 工作对象中保留于 `layers['counts']`；全基因 log-normalized 表达保留于 `raw`。若未来需要全基因原始 counts，必须另行扩展保存接口。
 - Cluster numbers from other samples or historical runs are not mapped directly onto the current cells. 不把其他样本或历史运行的 cluster 编号直接映射到当前细胞。
 - When the user requests iterative execution, continue within that requested scope using configured parameters and new candidate runs. The automatic MVP searches only PCs, neighbors, resolution and min_dist; other scientific changes are separate experiments. This template does not grant execution authorization on its own.
   用户要求执行迭代时，在已授权范围内通过配置和新候选运行持续推进。自动 MVP 仅搜索 PCs、neighbors、resolution 和 min_dist；其他科学参数变化作为独立实验记录。模板本身不代表执行授权。
-- Without human review, an exploratory run is not marked as a formal result, and existing H5AD, per-cell annotations or parameter files are not overwritten.
-  未经人工复核，不把探索性运行标记为正式结果，也不覆盖已有 H5AD、逐细胞注释或参数文件。
+- A complete candidate may be delivered FOR REVIEW before biological approval. Preserve scientific outputs; layout approval alone never approves cell identities.
+  完整候选图先交付并标明待审批；保留科学数据，排版批准不等于注释批准。
 - "Pass" is never manufactured by relaxing validation, deleting failure evidence, or chasing historical numbers.
   不通过放宽验证、删除失败证据或追求历史数字来制造“通过”。
 
@@ -41,7 +57,7 @@ Run root / 运行根目录：`Results/runs/<run-id>/`。Below, `Results/Scanpy/<
   当前状态、基线、每轮验证和修正决策；每轮工作后更新。
 - Notebook（`Notebooks/<notebook>.ipynb`；打包入口 / packaged entry `Notebooks/scanpy_workflow.ipynb`）：the single source of truth for the analysis implementation and parameters.
   分析实现和参数的唯一事实来源。
-- `Results/Scanpy/<run-id>/scanpy_workflow_executed.ipynb`：the complete executed copy of the most recent verified run; the canonical notebook stays output-free and error-free when committed.
+- `Results/runs/scanpy/<run-id>/scanpy/scanpy_workflow_executed.ipynb`：the complete executed copy of the most recent verified run; the canonical notebook stays output-free and error-free when committed.
   最近一次通过验证的完整执行副本；canonical Notebook 提交时保持零输出、零错误。
 - `confirmed_parameters.json`：the machine-readable parameters a formal run actually adopted. 一次正式运行实际采用的机器可读参数。
 - `figure_manifest.json`：the list of figures a run actually exported. 一次运行实际导出的图片清单。
@@ -56,8 +72,8 @@ The workflow below corresponds to the current implementation of the packaged not
 
 - Import Scanpy, AnnData, Scrublet, Harmony, Pandas, NumPy and plotting libraries; fix the random seed at `RANDOM_SEED = 0`.
   导入 Scanpy、AnnData、Scrublet、Harmony、Pandas、NumPy 和绘图库，固定随机种子 `RANDOM_SEED = 0`。
-- `RUN_KIND='baseline'` uses the formal output interface and requires `ITERATION_ID=None`; `RUN_KIND='candidate'` requires a unique `ITERATION_ID` and writes to `Results/Scanpy/<run-id>/iterations/<ITERATION_ID>/`.
-  `RUN_KIND='baseline'` 使用正式输出接口且要求 `ITERATION_ID=None`；`RUN_KIND='candidate'` 要求唯一 `ITERATION_ID`，并写入 `Results/Scanpy/<run-id>/iterations/<ITERATION_ID>/`。
+- `RUN_KIND='baseline'` uses the formal output interface and requires `ITERATION_ID=None`; `RUN_KIND='candidate'` requires a unique `ITERATION_ID` and writes to `Results/runs/scanpy/<run-id>/scanpy/iterations/<ITERATION_ID>/`.
+  `RUN_KIND='baseline'` 使用正式输出接口且要求 `ITERATION_ID=None`；`RUN_KIND='candidate'` 要求唯一 `ITERATION_ID`，并写入 `Results/runs/scanpy/<run-id>/scanpy/iterations/<ITERATION_ID>/`。
 - An existing candidate directory raises an error immediately, preventing directory reuse or overwriting of the previous round's evidence.（模板说明 / template note: the packaged notebook raises unless `overwrite_data_outputs` is explicitly enabled to resume in the same run directory; a new `ITERATION_ID` always stays isolated.）
   已存在的 candidate 目录会直接报错，避免复用目录或覆盖上一轮证据。（模板说明：只有在显式允许 `overwrite_data_outputs` 时才允许在同一 run 目录续跑；新的 `ITERATION_ID` 始终隔离。）
 - Read each sample's 10x filtered matrix from the manifest-declared input path (source example: `CYL`, `ZCP` under `Data/Matrix/`).
@@ -175,8 +191,8 @@ Notebook 把基础 QC 判定写入 `obs['pass_basic_qc']`，记录各 cohort 过
   单独绘制上皮相关 cluster 和稀有 cluster 的 marker dotplot，并汇总稀有群的细胞数、QC、doublet score 和 cohort 构成。
 - Generate Leiden, cell-type, sample and QC UMAPs on the post-Harmony coordinates; generate the group UMAP only when a verified `obs['group']` exists.
   在 Harmony 后坐标分别生成 Leiden、cell type、sample 和 QC UMAP；只有存在经过验证的 `obs['group']` 时才生成 group UMAP。
-- All notebook figures are written as 300 dpi PNGs into `Results/Scanpy/<run-id>/figures/` and registered in the manifest at the same time.
-  所有 Notebook 图片以 300 dpi PNG 写入 `Results/Scanpy/<run-id>/figures/`，同时登记到 manifest。
+- All notebook figures are written as 300 dpi PNGs into `Results/runs/scanpy/<run-id>/scanpy/figures/` and registered in the manifest at the same time.
+  所有 Notebook 图片以 300 dpi PNG 写入 `Results/runs/scanpy/<run-id>/scanpy/figures/`，同时登记到 manifest。
 - Those PNGs stay comparable across rounds: exploratory and final single-panel annotation figures use the same 8 in square canvas, 4 in square axes, single-column legend and colouring convention. Compare matching layouts; multi-panel overviews have smaller axes.
   中间探索图与最终单面板注释图使用同样的 8 in 方形画布、4 in 正方绘图区、单列图例和着色约定。跨轮比较相同布局；多面板概览的绘图区较小。
 
@@ -359,4 +375,4 @@ Only when all of the following hold may the report be written as "pass":
 
 ## Batch figure delivery / 同批次图集
 
-New run plans collect this route’s results under `Results/runs/<run-id>/figures_comparison/`. The manifest records source identity and artifact checksums. Ordinary and supervised embeddings are separate; DMR heatmaps are existing verified copies. Stage Reports expose rendering and visual-review status independently of analysis completion.
+New run plans collect this route’s results under `Results/runs/scanpy/<run-id>/figures_comparison/`. The manifest records source identity and artifact checksums. Ordinary and supervised embeddings are separate; DMR heatmaps are existing verified copies. Stage Reports expose rendering and visual-review status independently of analysis completion.

@@ -46,7 +46,8 @@ scales and DMR matrix audits, read [publication figures](publication-figures.md)
 Those derived revisions preserve the original delivery. Collecting existing DMR
 rasters does not perform the matrix audit or produce a balanced heatmap.
 
-`run_summary.json` distinguishes `analysis_status`, `figure_delivery_status` and `visual_review_status`. The ordinary run `status` describes automatic DAG completion. `rendered_verified` means file verification, not visual or biological approval. Stage reports also show the run-level delivery state, separately from stage task counts.
+`run_summary.json` distinguishes `analysis_status`, `figure_delivery_status` and `visual_review_status`. For new Scanpy plans the run `status` also includes the full RNA delivery gate;
+`awaiting_complete_delivery` means numerical tasks may already be complete. `rendered_verified` means file verification, not visual or biological approval. Stage reports also show the run-level delivery state, separately from stage task counts.
 
 After actually examining all final atlas/DMR PNGs and representative single panels, record the outcome:
 
@@ -61,3 +62,7 @@ Supply every final atlas and DMR PNG, plus at least one single panel when presen
 ## Upgrade
 
 The new Python tools change code_signature and input_signature. Do not update runtime files in a project with active jobs. Upgrade only idle projects, then make a new run and obtain matching validation evidence. Old frozen plans and outputs are not retroactively rewritten or redrawn. Projects with legacy task_outputs and no figure delivery remain readable.
+
+The ordinary Scanpy comparison atlas supplements the fixed A–O main figure; see
+[full Scanpy workflow](scanpy.md). It cannot replace the integrated third-row
+doublet diagnostics, composition and marker dotplot.

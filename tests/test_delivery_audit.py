@@ -42,6 +42,13 @@ def complete(root):
 
 
 class DeliveryAuditTests(unittest.TestCase):
+    def test_explicit_overview_isolated_from_stale_project_pointer(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); _,result,_,_=complete(root)
+            write_json(root/'config/figure_delivery.json',{'rna_overview_manifests':['obsolete.json']})
+            report=audit(root,'test',['scanpy'],overview_manifests=[str(result/'overview/delivery_manifest.json')])
+            self.assertEqual(report['status'],'complete',report)
+
     def test_missing_overview_registration_fails_full_scanpy_delivery(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp); complete(root); (root/'config/figure_delivery.json').unlink()

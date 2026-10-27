@@ -12,8 +12,8 @@ correlation heatmaps and one owning delivery root for related figures and tables
 
 Every full automated Scanpy delivery includes one readable integrated PNG.
 Default layout places doublet diagnostics in the THIRD UMAP row, after annotation
-and QC; a user-selected second row is also valid. Do not put them ahead of the
-main cell-type view unless requested. Use these panels on the same canvas:
+and QC; the accepted default is fixed. A later explicit layout change requires
+a recorded scoped override rather than silently changing this contract. Use these panels on the same canvas:
 
 | Panel | Content |
 |---|---|
@@ -141,7 +141,7 @@ or reseal outputs merely to pass a newer contract.
 
 ## Full-delivery manifest and automation
 
-New integrated deliveries set `delivery_contract: rna_full_v1` and `panel_roles`
+New integrated deliveries set `delivery_contract: rna_full_v2` and `panel_roles`
 (letter to semantic role). The 15 roles are `cell_type`, `leiden`, `sample`,
 `condition`, `confidence`, `total_counts`, `detected_genes`, `mitochondrial_percent`,
 `doublet_before`, `doublet_after`, `doublet_class`, `doublet_score`,
@@ -181,3 +181,39 @@ are per run and source evidence is still validated; they do not promote an
 unrelated old figure. Keep `rna_overview_manifests` current. A nested overview
 may live beneath its declared producer root. No config switch disables the full
 Scanpy gate; use the scoped overview checker for a narrow appearance proposal.
+
+## Shared approved geometry
+
+Use `tools/rna_overview_layout.py:create_canvas()` to obtain the figure, axes
+keyed A–O and layout specification. Fill the axes with verified source data;
+call `record_layout(figure, axes, specification)` after drawing and save the
+returned record as manifest `layout`. Set `panel_roles` to the specification’s
+exact mapping, and include the actual `samples` count. The checker compares
+actual axes against `geometry()` for the recorded type/gene/sample counts and
+longest label, including third-row doublets and square UMAP axes. It also reads
+PNG pHYs resolution; a manifest claiming 300 DPI is insufficient.
+
+Base dimensions are 32×27 inches (9600×8100 at 300 DPI). More rows, genes,
+samples or long labels expand the canvas without changing its role order.
+Use the same sample/type order in all tables. This helper is reusable geometry,
+not a general annotation renderer; adapters still supply data, legends, colour
+bars and visual review. Do not hardcode a cohort name or label count in the skill.
+Full delivery now requires `rna_full_v2`; v1/A–K manifests remain readable with
+the scoped historical checker and are not retroactively promoted.
+
+```python
+from rna_overview_layout import create_canvas, record_layout
+fig, axes, spec = create_canvas(n_types, n_genes, n_samples,
+                                 max(map(len, cell_type_order)))
+# Populate A–H from retained-cell data; I–L from matching doublet evidence;
+# M–N from composition tables; O from marker mean/fraction tables.
+# Set equal-span x/y windows for each UMAP; add outside legends/colour bars.
+manifest['panel_roles'] = spec['panel_roles']
+manifest['layout'] = record_layout(fig, axes, spec)
+fig.savefig(output_png, dpi=300, bbox_inches=None, facecolor='white')
+```
+
+The helper does not fabricate missing source data or issue a visual pass. Record
+three separate decisions: rendered/artifact-verified, visually checked, and
+biologically approved. User acceptance of this layout sets only the layout
+policy; future candidate biological labels remain FOR REVIEW.

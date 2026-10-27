@@ -19,8 +19,9 @@ class RuntimeDeliveryContracts(unittest.TestCase):
             spec.write_text(json.dumps([{'name':'workflow_summary','profile':'summary'}]))
             result = plan_custom(root, spec, 'custom', 'scanpy')
             self.assertEqual(result['plan_identity_version'], 2)
-            self.assertEqual(result['delivery_contract'], 'rna_full_v1')
+            self.assertEqual(result['delivery_contract'], 'rna_full_v2')
             self.assertTrue(result['runtime_identity'])
+            self.assertTrue((root/'tools/rna_overview_layout.py').is_file())
             self.assertEqual(result['tasks'][0]['outputs'], ['{task_dir}/task_outputs.json'])
             with self.assertRaisesRegex(WorkflowError, 'Preserve existing'):
                 plan_custom(root, spec, 'custom', 'scanpy')

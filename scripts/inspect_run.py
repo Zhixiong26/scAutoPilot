@@ -240,7 +240,7 @@ def inspect(project: Path, run_id: str) -> dict:
                 result['status'] = 'awaiting_agent_annotation'
         else:
             result['candidate_delivery_status'] = 'awaiting_user_approval' if annotation != 'reviewed' else 'approved'
-    if status == 'complete' and plan.get('delivery_contract') == 'rna_full_v1':
+    if status == 'complete' and plan.get('delivery_contract') in ('rna_full_v1', 'rna_full_v2'):
         from audit_delivery import automatic_audit
         full_delivery = automatic_audit(project, plan)
         result['full_delivery_status'] = full_delivery['status']

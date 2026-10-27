@@ -743,8 +743,11 @@ class SkillTests(unittest.TestCase):
             subprocess.check_call([sys.executable, str(ROOT / "scripts" / "plan_workflow.py"), "--project", str(project), "--routes", "auto", "--run-id", "unit"])
             subprocess.check_call([sys.executable, str(ROOT / "scripts" / "submit_workflow.py"), "--project", str(project), "--run-id", "unit"])
             code = subprocess.call([sys.executable, str(ROOT / "scripts" / "inspect_run.py"), "--project", str(project), "--run-id", "unit"])
-            self.assertEqual(code, 0)
-            self.assertTrue((project / ".workflow/runs/unit/workflow.COMPLETE").is_file())
+            self.assertEqual(code, 1)
+            summary=json.loads((project/".workflow/runs/unit/run_summary.json").read_text())
+            self.assertEqual(summary["status"], "awaiting_complete_delivery")
+            self.assertTrue(all(row["evidence_valid"] for row in summary["tasks"]))
+            self.assertFalse((project / ".workflow/runs/unit/workflow.COMPLETE").is_file())
             artifact = project / ".workflow/runs/unit/tasks/scanpy/artifact"
             artifact.unlink()
             self.assertNotEqual(inspect_run(project, "unit")["status"], "complete")
@@ -1392,6 +1395,16 @@ class SkillTests(unittest.TestCase):
             self.assertFalse(refresh_run_log(project)["written"])
             self.assertEqual(report.read_bytes(), before)
 
+    def inspect_numerical_fixture(self, project, run_id):
+        # This fixture completes numerical tasks but deliberately has no full figures.
+        result=subprocess.run([sys.executable,str(ROOT/"scripts/inspect_run.py"),
+            "--project",str(project),"--run-id",run_id],capture_output=True,text=True)
+        self.assertEqual(result.returncode,1,result.stderr)
+        summary=json.loads((project/".workflow/runs"/run_id/"run_summary.json").read_text())
+        self.assertEqual(summary["status"],"awaiting_complete_delivery")
+        self.assertTrue(all(row["evidence_valid"] for row in summary["tasks"]))
+        return summary
+
     def test_readme_is_frozen_after_inspection(self):
         with tempfile.TemporaryDirectory() as temp:
             project = self.generate(Path(temp), "rna")
@@ -1401,8 +1414,7 @@ class SkillTests(unittest.TestCase):
                                    "--project", str(project), "--routes", "auto", "--run-id", "unit"])
             subprocess.check_call([sys.executable, str(ROOT / "scripts/submit_workflow.py"),
                                    "--project", str(project), "--run-id", "unit"])
-            subprocess.check_call([sys.executable, str(ROOT / "scripts/inspect_run.py"),
-                                   "--project", str(project), "--run-id", "unit"])
+            self.inspect_numerical_fixture(project, "unit")
             subprocess.check_call([sys.executable, str(ROOT / "scripts/update_report.py"),
                                    "--project", str(project)])
             self.assertEqual(readme.read_bytes(), before)
@@ -1416,17 +1428,14 @@ class SkillTests(unittest.TestCase):
                                        "--project", str(project), "--routes", "auto", "--run-id", run_id])
                 subprocess.check_call([sys.executable, str(ROOT / "scripts/submit_workflow.py"),
                                        "--project", str(project), "--run-id", run_id])
-            subprocess.check_call([sys.executable, str(ROOT / "scripts/inspect_run.py"),
-                                   "--project", str(project), "--run-id", "unit"])
+            self.inspect_numerical_fixture(project, "unit")
             report = project / "Report.md"
             once = report.read_text(encoding="utf-8")
             self.assertEqual(once.count("<!-- SCMO-RUN:unit:START -->"), 1)
             self.assertEqual(once.count("<!-- SCMO-RUN:second:START -->"), 0)
-            subprocess.check_call([sys.executable, str(ROOT / "scripts/inspect_run.py"),
-                                   "--project", str(project), "--run-id", "unit"])
+            self.inspect_numerical_fixture(project, "unit")
             self.assertEqual(report.read_text(encoding="utf-8").count("<!-- SCMO-RUN:unit:START -->"), 1)
-            subprocess.check_call([sys.executable, str(ROOT / "scripts/inspect_run.py"),
-                                   "--project", str(project), "--run-id", "second"])
+            self.inspect_numerical_fixture(project, "second")
             inspected = report.read_bytes()
             # The rebuild path and the automatic path are one renderer, so both
             # reproduce the file inspection left behind, byte for byte.
@@ -1564,8 +1573,7 @@ class SkillTests(unittest.TestCase):
                                    "--project", str(project), "--routes", "auto", "--run-id", "unit"])
             subprocess.check_call([sys.executable, str(ROOT / "scripts/submit_workflow.py"),
                                    "--project", str(project), "--run-id", "unit"])
-            subprocess.check_call([sys.executable, str(ROOT / "scripts/inspect_run.py"),
-                                   "--project", str(project), "--run-id", "unit"])
+            self.inspect_numerical_fixture(project, "unit")
             subprocess.check_call([sys.executable, str(ROOT / "scripts/update_report.py"),
                                    "--project", str(project)])
             scanpy = project / "Scripts" / "Scanpy" / "Report.md"
@@ -1587,7 +1595,7 @@ class SkillTests(unittest.TestCase):
             root = (project / "Report.md").read_text(encoding="utf-8")
             for text in (root, scanpy.read_text(encoding="utf-8")):
                 self.assertIn("<!-- SCMO-RUN:unit:START -->", text)
-                self.assertIn("`unit` — complete", text)
+                self.assertIn("`unit` — awaiting_complete_delivery", text)
 
     def test_stage_routing_names_every_task_that_has_a_home(self):
         expected = {

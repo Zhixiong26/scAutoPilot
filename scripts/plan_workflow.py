@@ -254,7 +254,7 @@ def plan(project: Path, routes_option: str, run_id: str) -> dict:
         "runtime_identity": runtime_identity(root), "plan_identity_version": 2,
         "git_commit": git_commit(root), "template_lock": template_lock,
         "result_layout_version": 2, "result_category": category,
-        "delivery_contract": "rna_full_v1" if selected.get("scanpy") else None,
+        "delivery_contract": "rna_full_v2" if selected.get("scanpy") else None,
         "result_dir": str(result_dir), "tasks": tasks,
     }
     write_json(run_dir / "preflight.json", preflight)

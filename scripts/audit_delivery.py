@@ -135,7 +135,7 @@ def audit(project, run_id, routes, source_runs=(), annotation_run=None, required
     def overview_requirements():
         configured = []
         settings = root / 'config/figure_delivery.json'
-        if 'scanpy' in routes and settings.exists():
+        if 'scanpy' in routes and settings.exists() and not overview_manifests:
             configured = read_json(settings)['rna_overview_manifests']
             require(isinstance(configured, list) and bool(configured), 'empty RNA overview requirements')
         names = list(overview_manifests) + configured
@@ -189,7 +189,7 @@ def main():
     parser.add_argument('--source-run', action='append', default=[])
     parser.add_argument('--annotation-run')
     parser.add_argument('--require', action='append', default=[], help='Additional user-requested files; repeatable')
-    parser.add_argument('--overview-manifest', action='append', default=[], help='A–K RNA overview manifest; repeatable')
+    parser.add_argument('--overview-manifest', action='append', default=[], help='Complete fixed-layout A–O RNA overview manifest; repeatable')
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     report = audit(args.project, args.run_id, args.routes, args.source_run, args.annotation_run, args.require, args.overview_manifest)
