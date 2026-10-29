@@ -63,6 +63,12 @@ the skill was not explicitly invoked:
 - Preserve unrequested display settings for plot-only edits. Keep gene scales,
   missingness, denominators and support counts
   explicit and export the numerical source tables.
+- New clustering/annotation revisions inherit the approved figure style too.
+  Before rendering dotplots, read the project style record and approved reference
+  (including archived outputs); use the same renderer/settings for standalone
+  and integrated views. Compare actual PNGs against that reference. Follow the
+  skill's `references/rna-overview.md` dotplot style contract; do not silently
+  substitute a default colormap, scaling, grouping or legend design.
 - DMR heatmaps require raw mean ratio, DMR-wise Z-score, display-compressed
   Z-score and mean of saved single-cell Z-scores, with missing coverage retained;
   do not substitute Z-scored type means for the fourth view.

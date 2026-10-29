@@ -1,6 +1,6 @@
 # Single-cell Multiomics Analysis
 
-0.16.9：固定分层注释的分类顺序、分组图例和分类说明；全局 Level 1/2 图与完整 Level 3 注释图统一交付。新增分类对应、细胞数、说明和大类图的自检，保留已确认的紧凑 A–O 排版。详见[分层 RNA 注释](references/rna-hierarchy.md)。
+0.16.10：重聚类或更新注释也必须继承已确认的点图样式；独立点图与集合图复用同一套设置，并对照已批准的图做视觉检查。详见[点图样式约定](references/rna-overview.md#preserve-approved-dotplot-style)。保留 0.16.9 的分层顺序、分类说明和紧凑 A–O 排版要求。
 
 0.16.7：完整 Scanpy 总图必须包含 doublet 四图（默认 UMAP 第三排）、注释/QC、组成及每类三基因点图。新计划在 summary 后自动检查交付；缺图、细胞不一致或视觉检查过期时阻止整批完成，数值分析不重复运行。此次修改运行器，历史计划不重写；详见[完整 RNA 图件协议](references/rna-overview.md)。
 

@@ -202,6 +202,37 @@ unrelated old figure. Keep `rna_overview_manifests` current. A nested overview
 may live beneath its declared producer root. No config switch disables the full
 Scanpy gate; use the scoped overview checker for a narrow appearance proposal.
 
+## Preserve approved dotplot style
+
+Reclustering, filtering cells or updating annotations does not authorize a new
+visual theme. Resolve style from the latest explicit user instruction, then the
+project's recorded approved style/reference figure, then renderer defaults only
+when no approved source exists. Check archived approved deliveries when the
+current output has drifted. A new revision inherits presentation while its data,
+labels and supported markers come from the new analysis.
+
+Store the selected settings in a project file such as
+`config/rna_dotplot_style.json`; reuse one renderer for standalone and integrated
+dotplots. Record the source figure/review and settings hash in delivery evidence.
+Freeze colormap, normalization semantics and limits rule, fraction cutoff and
+area mapping, row shading, separators, group headings, label order, and separate
+colour/size legend placement. Preserve the rule for a data-dependent maximum,
+not an obsolete numerical maximum from another dataset. Do not silently replace
+unscaled mean expression with gene-wise scaling.
+
+For a project whose approved figure uses red gradients, alternating pale rows
+and broad-class headings, reproduce those choices; they are not universal
+defaults for other projects. Keep three supported markers per annotation and
+single-line labels under the existing contract. Adapt dimensions for readability
+without changing the approved design.
+
+Before handoff, compare the actual final standalone PNG and overview dotplot to
+the approved reference for these settings, not just clipping and readability.
+Record any requested deviation and its reason in visual review. An appearance
+repair must verify unchanged source IDs/values and unaffected panels, then
+refresh both PNG records and delivery audits. This is an agent rendering/review
+requirement; the layout checker alone does not validate dotplot style fidelity.
+
 ## Shared approved geometry
 
 Use `tools/rna_overview_layout.py:create_canvas()` to obtain the figure, axes

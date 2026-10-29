@@ -31,6 +31,10 @@ not authorize execution, annotation approval, or unrelated experiments.
 
 ## Project-wide output and plotting contract
 
+When regenerating figures, inherit the user's approved presentation even after
+reclustering or a new annotation revision. Read the saved project style and
+reference figure before selecting defaults; see the [dotplot style contract](references/rna-overview.md#preserve-approved-dotplot-style).
+
 Read [result layout](references/result-layout.md) before creating outputs.
 All new analyses, including exploration, custom scripts and figure revisions,
 use `Results/runs/<category>/<run-id>/`. Built-in plans select the category;

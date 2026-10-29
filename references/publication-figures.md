@@ -84,6 +84,10 @@ retain their requested scope; they do not require an unrelated full analysis.
   evidence-supported, distinct genes per annotation by default (see the RNA
   contract for missing evidence and shared genes). Export the
   mean/fraction table. Do not force dotplots square or use clipped marker labels.
+  Inherit approved presentation through the [dotplot style contract](rna-overview.md#preserve-approved-dotplot-style),
+  including for new clustering/annotation revisions. Reuse the project renderer
+  for standalone and integrated views; library defaults must not override an
+  existing approved style.
 - **Composition:** export counts and fractions by sample/condition, recording
   denominators and sample counts. Fractions normalized within different
   conditions are separate series, not additive stacked portions of one total.

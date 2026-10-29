@@ -1,5 +1,13 @@
 # Template maintenance
 
+Version 0.16.10 preserves approved dotplot style across both appearance repairs
+and new scientific revisions. It requires a project style record, reuse of the
+same standalone/integrated renderer and reference-based visual comparison.
+This is a documentation/generated AGENTS update, not a new portable renderer or
+automatic style validator. Project-specific palettes and constants remain local.
+Synchronize all skill copies; no executable runtime or frozen plan changes are
+needed for this release.
+
 Version 0.16.9 adds explicit hierarchical RNA delivery guidance: preserve global
 Level 1/2 figures and classification explanations, reuse recorded biological
 order, and deliver annotated/reviewed per-parent Level 3 figures. The overview
