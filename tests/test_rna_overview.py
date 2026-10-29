@@ -52,7 +52,7 @@ def fixture(root):
 
 
 def seal(root, manifest):
-    files = [p for p in root.rglob('*') if p.is_file() and p.suffix in ['.png', '.tsv']]
+    files = [p for p in root.rglob('*') if p.is_file() and p.suffix in ['.png', '.tsv', '.md']]
     manifest['artifacts'] = [dict(path=str(p.relative_to(root)), sha256=sha(p), bytes=p.stat().st_size) for p in files]
     write_json(root / 'delivery_manifest.json', manifest)
     write_json(root / 'visual_review.json', dict(status='passed', reviewer='fixture', notes='fixture only',
@@ -81,6 +81,39 @@ def full_fixture(root):
 
 
 class OverviewTests(unittest.TestCase):
+    def test_classification_requires_order_mapping_explanation_and_review(self):
+        for failure in [None, 'absent', 'order', 'counts', 'cell_mapping', 'guide', 'figure', 'review']:
+            with self.subTest(failure=failure), tempfile.TemporaryDirectory() as temp:
+                root=Path(temp); manifest=fixture(root)
+                manifest['annotation_hierarchy'] = dict(
+                    group_order=['Lineage A','Lineage B'],
+                    groups={'Lineage A':['Type A'],'Lineage B':['Type B']},
+                    annotation_column='subtype', broad_column='broad',
+                    mapping_table='tables/classification.tsv', guide='classification.md',
+                    level1_figure='single_panels/level1.png')
+                (root/'single_panels/level1.png').write_bytes(png(2400,2400))
+                (root/'classification.md').write_text('Lineage A: first lineage. Lineage B: second lineage.')
+                (root/'tables/classification.tsv').write_text('cell_type\tgroup\tcells\nType A\tLineage A\t1\nType B\tLineage B\t1\n')
+                (root/'tables/panel_source.tsv').write_text('cell_id\tsubtype\tbroad\ncell1\tType A\tLineage A\ncell2\tType B\tLineage B\n')
+                if failure=='absent': del manifest['annotation_hierarchy']
+                elif failure=='order': manifest['annotation_hierarchy']['group_order'].reverse()
+                elif failure=='counts':
+                    p=root/'tables/classification.tsv';p.write_text(p.read_text().replace('Lineage A\t1','Lineage A\t2'))
+                elif failure=='cell_mapping':
+                    p=root/'tables/panel_source.tsv';p.write_text(p.read_text().replace('Type A\tLineage A','Type A\tLineage B'))
+                elif failure=='guide': (root/'classification.md').write_text('Lineage A only')
+                elif failure=='figure': (root/'single_panels/level1.png').unlink()
+                seal(root,manifest)
+                if failure not in ['review','figure']:
+                    p=root/'visual_review.json';review=json.loads(p.read_text())
+                    review['inspected']['single_panels/level1.png']=sha(root/'single_panels/level1.png')
+                    write_json(p,review)
+                if failure:
+                    with self.assertRaises(ValueError):
+                        validate_overview(root/'delivery_manifest.json',require_classification=True)
+                else:
+                    self.assertEqual(validate_overview(root/'delivery_manifest.json',require_classification=True)['cells'],2)
+
     def test_full_contract_rejects_legacy_and_accepts_complete_diagnostics(self):
         with tempfile.TemporaryDirectory() as temp:
             root=Path(temp); fixture(root)

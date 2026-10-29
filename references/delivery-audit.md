@@ -1,5 +1,10 @@
 # Full-analysis delivery self-check
 
+Hierarchical global overviews also use `audit_rna_overview.py
+--require-classification` with the declared classification mapping, explanation
+and Level 1 figure. See [RNA hierarchy](rna-hierarchy.md) for global and per-parent
+deliverables. A passing subset check does not replace the full-analysis gate.
+
 Run this gate at handoff for a full analysis, even if a custom DAG reports all its
 tasks complete. Use routes requested by the user, not the routes left in that DAG.
 The audit is read-only except for its JSON report; exit 1 means incomplete.

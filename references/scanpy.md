@@ -1,5 +1,9 @@
 # Scanpy: analysis, annotation and complete delivery
 
+For a three-level annotation request, follow [RNA hierarchy](rna-hierarchy.md):
+keep global broad/subtype views and classification explanations, and annotate
+and review each selected parent's independent analysis before its collection.
+
 ## Start from the requested stage
 
 Read the project configuration, sample/capture metadata, selected source run,

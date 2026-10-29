@@ -55,6 +55,11 @@ invented coordinates or an unexplained blank panel.
 
 ## Annotation level and markers
 
+For broad classes, subtypes and independent within-subtype annotation, follow
+[hierarchical RNA annotation](rna-hierarchy.md). Keep the global Level 1/2
+figures and classification explanation in the canonical delivery alongside
+Level 3 results; parent-specific collections do not replace them.
+
 Record the plotted annotation column and level (major type, subtype or mixed
 type/state labels). For RNA–DNAm work a major-type main view and RNA subtype
 supplement may be appropriate; do not assume methylation resolves RNA subtypes.
@@ -89,6 +94,21 @@ the standard mean table remains unscaled. Check all values are finite, fractions
 in [0,1], and own-group markers have expression support.
 
 ## Evidence and acceptance
+
+For a hierarchical global subtype view, also declare `annotation_hierarchy`:
+`group_order` (ordered broad labels), `groups` (broad label to ordered subtype
+list), `annotation_column`, `broad_column`, `mapping_table`, `guide`, and
+`level1_figure`. Flattening `groups` in `group_order` must equal
+`cell_type_order`. Export the mapping TSV with `cell_type`, `group`, `cells`
+in this same order, and include both annotation columns in `panel_source.tsv`.
+Register mapping, guide and global Level 1 PNG in `artifacts`; the guide names
+and explains every broad group. Include the Level 1 PNG in the hash-bound visual
+review. `audit_rna_overview.py --require-classification` rejects omitted
+hierarchy metadata, reordered/missing categories, incorrect per-cell mappings
+or counts, missing explanation/PNG and stale review. With the flag omitted,
+declared hierarchy metadata is still validated; legacy non-hierarchical
+manifests remain readable. This checks exported evidence, not label biology
+or whether the rendered legend visually matches the declaration.
 
 Export `sample_cell_counts.tsv`, `sample_cell_percent.tsv`,
 `condition_cell_counts.tsv`, `condition_cell_percent.tsv`, and `panel_source.tsv`

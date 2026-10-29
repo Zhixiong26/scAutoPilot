@@ -30,7 +30,8 @@ def table(path):
     return labels, columns, values
 
 
-def validate_overview(manifest_path, markers_per_annotation=3, require_full=False):
+def validate_overview(manifest_path, markers_per_annotation=3, require_full=False,
+                      require_classification=False):
     path = Path(manifest_path).resolve()
     root, data = path.parent, read_json(path)
     require(markers_per_annotation > 0, 'marker count must be positive')
@@ -127,6 +128,10 @@ def validate_overview(manifest_path, markers_per_annotation=3, require_full=Fals
     with exported('tables/panel_source.tsv').open(newline='') as stream:
         rows = list(csv.DictReader(stream, delimiter='\t'))
     require(len(rows) == data['cells'] and len({r['cell_id'] for r in rows}) == data['cells'], 'panel cell IDs/count mismatch')
+    require(not require_classification or 'annotation_hierarchy' in data,
+            'annotation hierarchy and classification explanation required')
+    if 'annotation_hierarchy' in data:
+        validate_classification(root, data, artifacts, rows)
     if fixed:
         from rna_overview_layout import validate_layout
         validate_layout(data)
@@ -137,9 +142,45 @@ def validate_overview(manifest_path, markers_per_annotation=3, require_full=Fals
     require(bool(review['reviewer']) and bool(review['notes']) and main in review['inspected'], 'main PNG review missing')
     for name, digest in review['inspected'].items():
         require(name in artifacts and name.endswith('.png') and digest == artifacts[name], 'stale image review: ' + name)
+    if 'annotation_hierarchy' in data:
+        require(data['annotation_hierarchy']['level1_figure'] in review['inspected'],
+                'Level 1 figure visual review missing')
     return {'manifest': str(path), 'sha256': sha(path), 'cells': data['cells'], 'annotations': len(types),
             'unique_markers': len(genes), 'marker_assignments': len(types) * markers_per_annotation,
             'grants_biological_approval': False}
+
+
+def validate_classification(root, data, artifacts, rows):
+    """Check declared subtype-to-broad mapping, not the biological truth of labels."""
+    from collections import Counter
+    h = data['annotation_hierarchy']
+    groups, order = h['groups'], h['group_order']
+    require(bool(order) and len(order) == len(set(order)) and set(order) == set(groups),
+            'classification group order/coverage mismatch')
+    require(all(isinstance(g, str) and g.strip() and '\n' not in g and '\r' not in g
+                and isinstance(groups[g], list) and bool(groups[g]) for g in order),
+            'blank/wrapped/empty classification group')
+    types = [t for g in order for t in groups[g]]
+    require(types == data['cell_type_order'] and len(types) == len(set(types)),
+            'classification order differs from plotted annotations')
+    for key in ('mapping_table', 'guide', 'level1_figure'):
+        require(h[key] in artifacts, 'classification artifact missing: ' + key)
+    require(h['level1_figure'].endswith('.png'), 'Level 1 figure must be PNG')
+    guide = (root / h['guide']).read_text(encoding='utf-8')
+    require(all(g in guide for g in order), 'classification guide omits a group')
+    expected = {t:g for g in order for t in groups[g]}
+    col, broad = h['annotation_column'], h['broad_column']
+    require(col != broad, 'subtype and broad columns must be separate')
+    require(all(r.get(col) in expected and r.get(broad) == expected[r[col]] for r in rows),
+            'per-cell classification mapping mismatch')
+    counts = Counter(r[col] for r in rows)
+    require(set(counts) == set(types), 'classification contains empty/missing annotations')
+    with (root / h['mapping_table']).open(newline='', encoding='utf-8') as stream:
+        mapping = list(csv.DictReader(stream, delimiter='\t'))
+    require([r['cell_type'] for r in mapping] == types, 'classification table order mismatch')
+    require(all(r['group'] == expected[r['cell_type']] and
+                int(r['cells']) == counts[r['cell_type']] for r in mapping),
+            'classification group/cell counts mismatch')
 
 
 FULL_ROLES = {'doublet_before', 'doublet_after', 'doublet_class', 'doublet_score',
@@ -214,9 +255,12 @@ def main():
     parser.add_argument('--markers-per-annotation', type=int, default=3)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--require-full', action='store_true', help='Require integrated doublet diagnostics and A–O panel coverage')
+    parser.add_argument('--require-classification', action='store_true',
+                        help='Require ordered hierarchy, global Level 1 PNG and classification explanation')
     args = parser.parse_args()
     try:
-        report = dict(status='complete', detail=validate_overview(args.manifest, args.markers_per_annotation, args.require_full))
+        report = dict(status='complete', detail=validate_overview(args.manifest, args.markers_per_annotation,
+                                                                 args.require_full, args.require_classification))
     except (OSError, ValueError, KeyError, TypeError, AssertionError, struct.error) as error:
         report = dict(status='incomplete', error=str(error))
     write_json(args.output, report)

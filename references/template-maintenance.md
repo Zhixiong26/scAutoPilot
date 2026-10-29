@@ -1,5 +1,16 @@
 # Template maintenance
 
+Version 0.16.9 adds explicit hierarchical RNA delivery guidance: preserve global
+Level 1/2 figures and classification explanations, reuse recorded biological
+order, and deliver annotated/reviewed per-parent Level 3 figures. The overview
+checker validates declared group order, mapping/counts, explanation, Level 1
+PNG and its visual review; `--require-classification` rejects absent declarations.
+Legacy manifests remain readable without this opt-in requirement. This does not
+add a universal hierarchy renderer or automatically validate biological labels.
+Synchronize source, installed and project skill copies. Updating the deployed
+checker changes runtime identity: deploy only to idle projects and use new
+validation/plans; preserve frozen historical plans and analyses.
+
 Version 0.16.8 consolidates the Scanpy workflow and approved compact A–O
 layout. A distributed `rna_overview_layout.py` supplies geometry and records
 actual axes; `rna_full_v2` checks exact role order/positions and PNG resolution.

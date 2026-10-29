@@ -1,5 +1,13 @@
 # Analysis results and figures
 
+For hierarchical RNA annotation, follow the local skill's
+`references/rna-hierarchy.md`. Preserve the recorded biological category order;
+show broad-group headings, single-line subtype names and a classification/count
+mapping. Keep global Level 1/2 views in the canonical entry alongside complete
+annotated Level 3 parent overviews and their collection. A collection of local
+cluster IDs is not biological annotation. Check the declared global hierarchy
+with `audit_rna_overview.py --require-classification` and inspect the actual PNGs.
+
 These rules cover all analysis in this project: skill workflows, custom tasks,
 notebooks, exploratory scripts, parameter comparisons and figure-only revisions.
 

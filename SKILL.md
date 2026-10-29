@@ -92,6 +92,11 @@ scientific dependency. Follow the signed output and recovery contracts in
 
 ## Annotation and iterative decisions
 
+For broad classes, subtypes and independent within-subtype reanalysis, read
+[RNA hierarchy](references/rna-hierarchy.md). Preserve global classification
+figures and ordered explanations alongside complete per-parent candidate
+deliveries; local cluster IDs alone are not biological annotations.
+
 For external RNA reference annotation of existing clusters, use the
 [cluster Spearman protocol](references/rna-reference-correlation.md) by default:
 mean log-normalized query-cluster versus reference-type profiles, complete
