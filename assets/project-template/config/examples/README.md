@@ -77,3 +77,5 @@ accounts, and absolute interpreter paths appear **nowhere** in the packaged
 scripts. They are supplied at runtime through `config/` and the environment. If
 you find one hardcoded in a stage script, that is a defect — see
 [template maintenance](../../../references/template-maintenance.md).
+
+Historical example only: its Scrublet method and cell counts are provenance, not the current default. New analyses default to scDblFinder and need new evidence; do not target the historical retained-cell count.

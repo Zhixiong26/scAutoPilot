@@ -8,7 +8,7 @@ The generated project carries versioned specs for four profiles:
 
 | Profile | Stages | Verification |
 |---|---|---|
-| `analysis_core` | orchestrator, Scanpy, ALLCools | imports Scanpy, ALLCools, Harmony, Scrublet, Leiden and YAML |
+| `analysis_core` | orchestrator, Scanpy, ALLCools | imports Scanpy, ALLCools, Harmony, Leiden and YAML, and probes R/scDblFinder, Matrix, SingleCellExperiment and BiocParallel (Scrublet remains available for explicit legacy selection) |
 | `methscan` | MethSCAn VMR/DMR | runs `methscan --version` |
 | `methylvi` | MethylVI training and plotting | imports `scvi.external.METHYLVI`, PyTorch, Scanpy and MuData |
 | `decision` | System One local/commercial decision backend | imports the pinned official `system-one-adapter`; Python >=3.10 |

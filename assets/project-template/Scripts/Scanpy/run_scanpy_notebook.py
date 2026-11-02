@@ -42,6 +42,10 @@ DEFAULTS: Dict[str, Any] = {
     "min_counts": 500,
     "max_mt_percent": 5.0,
     "min_cells_per_gene": 3,
+    "doublet_method": "scDblFinder",
+    "doublet_min_cells": 100,
+    "doublet_library_ids": {},
+    "scdblfinder": {"rscript": None, "dbr": None, "dbr_per1k": None, "clusters": False},
     "scrublet_min_cells": 100,
     "doublet_rate_per_1000": 0.004,
     "target_sum": 10000,
@@ -233,6 +237,10 @@ def build_parameters(root: Path, cfg: Dict[str, Any], samples: List[Dict[str, An
     qc_keys = {"min_genes": ("qc", "min_genes"), "max_genes": ("qc", "max_genes"),
                "min_counts": ("qc", "min_counts"), "max_mt_percent": ("qc", "max_mt_percent"),
                "min_cells_per_gene": ("qc", "min_cells_per_gene"),
+               "doublet_method": ("doublets", "method"),
+               "doublet_min_cells": ("doublets", "min_cells"),
+               "doublet_library_ids": ("doublets", "library_ids"),
+               "scdblfinder": ("scdblfinder",),
                "scrublet_min_cells": ("scrublet", "min_cells"),
                "doublet_rate_per_1000": ("scrublet", "doublet_rate_per_1000"),
                "target_sum": ("target_sum",), "n_hvg": ("hvg", "n_top_genes"),
@@ -251,6 +259,16 @@ def build_parameters(root: Path, cfg: Dict[str, Any], samples: List[Dict[str, An
         value = nested(analysis, *path)
         parameters[key] = DEFAULTS[key] if value is None else value
 
+    method = str(parameters["doublet_method"]).lower()
+    if method not in {"scdblfinder", "scrublet"}:
+        raise RunnerError("analysis.scanpy.doublets.method must be scDblFinder or scrublet")
+    parameters["doublet_method"] = "scDblFinder" if method == "scdblfinder" else "scrublet"
+    if not isinstance(parameters["scdblfinder"], dict):
+        raise RunnerError("analysis.scanpy.scdblfinder must be a mapping")
+    parameters["scdblfinder"] = dict(DEFAULTS["scdblfinder"], **parameters["scdblfinder"])
+    rscript = parameters["scdblfinder"].get("rscript")
+    if rscript:
+        parameters["scdblfinder"]["rscript"] = str(resolve_path(root, rscript))
     parameters["analysis_signature"] = scanpy_analysis_signature(parameters)
     if run_kind == "baseline" and profile_signature != parameters["analysis_signature"]:
         # Fail before the analysis runs: a profile recorded for other parameters must never be

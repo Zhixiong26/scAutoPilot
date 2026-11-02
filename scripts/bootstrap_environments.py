@@ -31,6 +31,10 @@ PROFILES: Dict[str, Dict[str, Any]] = {
             "bin/python", "-c",
             "import ALLCools,anndata,dask,harmonypy,imblearn,leidenalg,openTSNE,scanpy,scrublet,yaml,zarr; "
             "from ALLCools.clustering import ConsensusClustering,binarize_matrix,lsi,significant_pc_test,tsne; "
+            "import subprocess,sys; from pathlib import Path; "
+            "subprocess.run([str(Path(sys.executable).parent / 'Rscript'), '--vanilla', '-e', "
+            "'library(scDblFinder); library(SingleCellExperiment); library(Matrix); library(BiocParallel); "
+            "cat(as.character(packageVersion(\"scDblFinder\")))'], check=True); "
             "print('analysis_core', scanpy.__version__, anndata.__version__)",
         ],
     },

@@ -1,13 +1,12 @@
 # Paired RNA–DNAm doublet policy
 
 For paired RNA and DNA methylation, use one established detector per modality:
-**per independent capture library: compare Scrublet versus scDblFinder once,
-select one RNA detector → MethylScrublet → reconcile → one cell-level exclusion
-list applied to both modalities**. scDblFinder is the proposed RNA choice, not
-a predetermined winner. The authorized two-tool comparison is for selection,
-not permanent stacking, union/intersection filtering or majority voting.
-Do not add further RNA detectors or invent a new detection method. This is a workflow policy,
-not a claim that the two calls are statistically independent or infallible.
+**per independent capture library: RNA scDblFinder by default → DNAm
+MethylScrublet → reconcile → one cell-level exclusion list applied to both
+modalities**. Scrublet is an explicitly selected RNA alternative. A two-tool
+comparison is optional and runs only when requested; it is not a prerequisite
+for scDblFinder. Never stack, union/intersect or vote RNA calls by default.
+This policy does not imply that RNA and DNAm calls are independent or infallible.
 
 ## Identity and inputs
 
@@ -28,9 +27,8 @@ not a claim that the two calls are statistically independent or infallible.
 
 ## Official implementations and readiness
 
-Compare [official Scrublet](https://github.com/swolock/scrublet) with
-[Bioconductor scDblFinder](https://bioconductor.org/packages/release/bioc/vignettes/scDblFinder/inst/doc/scDblFinder.html)
-for RNA under the selection procedure below. Record version, random seed, per-library cell counts, expected-rate
+Use [Bioconductor scDblFinder](https://bioconductor.org/packages/release/bioc/vignettes/scDblFinder/inst/doc/scDblFinder.html)
+for RNA by default; [official Scrublet](https://github.com/swolock/scrublet) is an explicit alternative. Record version, random seed, per-library cell counts, expected-rate
 assumptions, thresholds, scores and calls. Expected rate is a prior, not a quota;
 do not force a fixed proportion to be removed or use one universal loading-rate
 formula for every chemistry. RNA singlet calls do not prove absence of doublets.
@@ -68,7 +66,12 @@ High reads, bridge positions in UMAP and differing RNA/DNAm annotations are
 After selecting the RNA method, do not bring the rejected tool or further RNA
 voters back solely to settle an individual disagreement.
 
-## RNA method selection: Scrublet versus scDblFinder
+## Optional requested comparison: Scrublet versus scDblFinder
+
+Without a requested comparison, record `scDblFinder` as the user-established
+default in `rna_method_selection.json` and proceed with its native calls.
+Do not claim superiority from the default choice. The following comparison
+procedure applies only when explicitly requested.
 
 1. Freeze the same per-library, basic-QC-passing original full-gene counts and
    exact cell set before either tool filters cells. Existing Scrublet results
@@ -126,17 +129,14 @@ before/after counts by library and donor, and the table/hash used by all branche
 Changing retained cells invalidates downstream graphs, models and DMR inputs;
 do not reuse cell-dependent results as if they were unchanged.
 
-## Migration boundary (0.15.1)
+## Migration boundary (0.16.11)
 
-This release updates agent instructions, not the packaged detector executor.
-The shipped Scanpy notebook still contains legacy optional Scrublet and its
-early RNA filtering. It does **not** implement the paired policy. Do not run
-that legacy cell-removal path as the new workflow or merely rename its scores.
-Before a new paired production run, deploy the RNA comparison and the selected
-RNA/DNAm official methods with smoke
-tests through an explicit signed DAG, disable legacy automatic Scrublet removal,
-and verify both branches consume the reviewed shared mask. If that integration
-is absent, report the gap and stop before destructive filtering; no silent
-fallback. Pure RNA/DNAm projects use the available detector and explicitly mark
-the other modality unavailable. Historical results and active frozen runtimes
-remain unchanged; policy adoption does not retroactively delete cells.
+The packaged RNA notebook now defaults to official scDblFinder and preserves
+pre-filter calls. It still applies an RNA-only mask and does **not** implement
+paired reconciliation. Before paired production, deploy both official detectors
+and the shared-mask adapter through an explicit signed DAG, smoke-test them,
+and verify neither branch filters before both are scored. A requested comparison
+adds its own evidence, not a mandatory stage. Missing dependencies are a clear
+failure, never silent Scrublet fallback. Pure RNA/DNAm projects mark the other
+modality unavailable. Preserve historical results and active frozen runtimes;
+policy adoption does not retroactively change cells or scores.

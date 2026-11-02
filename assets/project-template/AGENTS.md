@@ -111,3 +111,15 @@ New `rna_full_v2` plans automatically audit after summary and cannot acquire
 workflow completion until full delivery and visual review pass; do not repeat
 completed science to repair figure omissions. Read references/rna-overview.md
 for the manifest, exact-cell checks and explicit not-applicable exception.
+
+## Default RNA doublet method
+
+Use official **scDblFinder** by default for Scanpy doublet detection and removal.
+Scrublet is an explicit alternative; run a two-method comparison only when
+requested. Never fall back to Scrublet when R/scDblFinder is unavailable.
+Score original full-gene integer counts per independent capture after basic QC,
+before normalization/HVG selection. Preserve native scores/classes and all
+pre-filter cell IDs; do not force a fixed removal percentage. This concerns
+cell doublets, not duplicate gene names, barcodes, reads or UMI deduplication.
+
+See the skill references/configuration.md for capture mapping, R dependencies and migration. Preserve active/frozen executors; new detector settings need new validation/plans.

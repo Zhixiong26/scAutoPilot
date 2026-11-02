@@ -329,7 +329,7 @@ parameters:
     searchable: false
     note: >-
       与计划 §6.1 不符：不存在"单独的训练/降维 seed"。只有一个全局 seed，同时驱动
-      Scrublet（改变细胞集）、PCA、Harmony、两套 UMAP 与 Leiden。改 seed 等价于全链路
+      doublet 检测（默认 scDblFinder，改变细胞集）、PCA、Harmony、两套 UMAP 与 Leiden。改 seed 等价于全链路
       重跑，因此 affects 落在链首 qc_cells。
   scanpy.sample_palette:
     stage: scanpy
@@ -369,6 +369,48 @@ parameters:
     affects: [scanpy.qc_cells]
     read: ["Scripts/Scanpy/run_scanpy_notebook.py:221"]
     default: 5.0
+    verified_against: template
+    searchable: false
+  scanpy.doublets.method:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:240"]
+    default: scDblFinder
+    verified_against: template
+    searchable: false
+  scanpy.doublets.min_cells:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:240"]
+    default: 100
+    verified_against: template
+    searchable: false
+  scanpy.doublets.library_ids:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:240"]
+    default: {}
+    verified_against: template
+    searchable: false
+  scanpy.scdblfinder.dbr:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:240"]
+    default: null
+    verified_against: template
+    searchable: false
+  scanpy.scdblfinder.dbr_per1k:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:240"]
+    default: null
+    verified_against: template
+    searchable: false
+  scanpy.scdblfinder.clusters:
+    stage: scanpy
+    affects: [scanpy.qc_cells]
+    read: ["Scripts/Scanpy/run_scanpy_notebook.py:240"]
+    default: false
     verified_against: template
     searchable: false
   scanpy.scrublet.doublet_rate_per_1000:

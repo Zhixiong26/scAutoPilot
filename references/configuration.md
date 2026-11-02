@@ -1,5 +1,43 @@
 # Intake and configuration
 
+## Scanpy doublet defaults
+
+Implementation: [official scDblFinder vignette](https://bioconductor.org/packages/release/bioc/vignettes/scDblFinder/inst/doc/scDblFinder.html).
+
+`analysis.scanpy.doublets.method` defaults to `scDblFinder`; `scrublet` requires
+explicit selection. The default does not require a preliminary comparison.
+Configure `doublets.library_ids` as a mapping from each RNA `cell_id_prefix` to
+its verified independent capture ID. Each input in the built-in notebook must
+be one complete capture; merge technical splits first. Mixed-capture inputs
+require an explicit adapter using per-cell library metadata. Never substitute
+donor, condition or directory names for capture identity. Missing/duplicate
+capture declarations stop notebook execution before detection.
+
+```yaml
+analysis:
+  scanpy:
+    doublets:
+      method: scDblFinder
+      min_cells: 100
+      library_ids: {}  # Fill from capture metadata: cell_id_prefix: library_id
+    scdblfinder:
+      rscript: null  # Default: Rscript beside the configured Scanpy Python
+      dbr: null      # Omit for official automatic estimation
+      dbr_per1k: null  # Omit for the installed scDblFinder default
+      clusters: false
+```
+
+`analysis.scanpy.seed` controls reproducibility. Set rate assumptions explicitly
+when chemistry/loading requires them; rates are priors, not deletion quotas.
+Legacy `scanpy.scrublet.*` settings are used only with `method: scrublet`.
+The `analysis-core` environment includes R, Matrix, SingleCellExperiment,
+BiocParallel and scDblFinder; alternatively configure an existing compatible
+`rscript` path (relative to the project or absolute). Missing R/packages fail
+without fallback. Preserve `tables/doublet_calls.tsv`, per-capture evidence in
+`tables/scdblfinder/`, `doublet_qc_summary.tsv`, version/session/seed/settings
+and input hashes. Calls include excluded cells and use native classifications.
+
+
 For paired doublet analysis, explicitly collect per-cell `library_id` and
 `donor_id` alongside `cell_id` in an input metadata sidecar; do not assume one
 sample equals one capture. These are requirements of the [paired protocol](paired-doublets.md),
@@ -66,7 +104,7 @@ A profile binds a reviewed mapping to the run it was reviewed from, so it cannot
 
 The orchestrator Python must be 3.9 or newer. Stage-specific interpreters and executables are declared with absolute paths in `environments.tsv`. Known compatible environments are reused read-only. Missing profiles are created from the bundled specs by `bootstrap_environments.py`, verified, and then recorded with absolute paths; see [environment provisioning](environments.md).
 
-`scheduler.profiles` defines floor/target/ceiling resources for every task profile. `limited_profiles` selects memory-intensive profiles constrained by `max_parallel`. Scanpy defaults explicitly include HVG flavor, batch key, and Scrublet expected doublet rate in generated `analysis.yaml`.
+`scheduler.profiles` defines floor/target/ceiling resources for every task profile. `limited_profiles` selects memory-intensive profiles constrained by `max_parallel`. Scanpy defaults explicitly include HVG flavor, batch key, and scDblFinder method, capture mapping and native rate settings (legacy Scrublet settings are opt-in) in generated `analysis.yaml`.
 
 A full ALLC validation reads every file end to end, which on a project with tens of thousands of ALLC files is the slowest thing the workflow does, so it is split across chunk jobs on compute nodes rather than run in place. Three settings govern it, and the third applies only when the project cannot distribute the work:
 

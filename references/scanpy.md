@@ -1,5 +1,15 @@
 # Scanpy: analysis, annotation and complete delivery
 
+## Scanpy doublet defaults
+
+Use official scDblFinder by default; Scrublet or a same-input comparison requires
+explicit selection. See [configuration](configuration.md#scanpy-doublet-defaults)
+for the method, verified capture mapping, rate settings, R dependencies and
+pre-filter evidence. The built-in notebook accepts one complete capture per
+input; more complex capture layouts need an explicit adapter.
+ Calls include excluded cells and use native classifications.
+
+
 For a three-level annotation request, follow [RNA hierarchy](rna-hierarchy.md):
 keep global broad/subtype views and classification explanations, and annotate
 and review each selected parent's independent analysis before its collection.
@@ -13,11 +23,10 @@ work uses a signed DAG on a compute node; figure-only work reuses saved data.
 Do not rerun PCA, Harmony, neighbors, UMAP or Leiden to repair a figure.
 
 The bundled notebook is the numerical Scanpy implementation for 10x directories,
-ZIPs containing one matrix and 10x H5. Its legacy detector is per-sample Scrublet;
-it is not an implementation of scDblFinder or joint RNA–DNAm doublet analysis.
-If the user selected scDblFinder, use a validated per-capture adapter and record
-its actual parameters/calls; never silently run legacy Scrublet instead. The
-capture unit is an independent capture reaction, not necessarily a donor/sample.
+ZIPs containing one matrix and 10x H5. It defaults to official scDblFinder through
+`scdblfinder.py` and `run_scdblfinder.R`; Scrublet requires explicit selection.
+No comparison is required for the default. Use a validated per-capture adapter
+when inputs do not meet the built-in one-capture-per-input contract.
 For paired RNA–DNAm work, read [paired doublets](paired-doublets.md); RNA-only
 scope does not authorize methylation filtering. Preserve pre-filter counts,
 IDs, calls, scores and coordinate provenance needed for the final diagnostics.

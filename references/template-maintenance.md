@@ -1,5 +1,20 @@
 # Template maintenance
 
+Version 0.16.11 makes official scDblFinder the default Scanpy RNA doublet
+method in instructions, generated configuration and the executable notebook.
+Scrublet and same-input comparisons are explicit alternatives. The sparse
+Python/R bridge preserves native scores/classes, pre-filter calls, capture
+identities, input hashes and R session/parameter evidence. Configure verified
+`doublets.library_ids`; the built-in per-input route requires one complete
+capture per input. The environment now needs R/Bioconductor dependencies.
+Changing method changes retained cells and analysis/runtime signatures: use new
+validation and plans for an idle/new runtime. Synchronizing skill copies does
+not upgrade active/frozen executors or relabel historical results. The packaged
+historical IPF example retains its original Scrublet execution. Paired RNA–DNAm
+still needs a deployed MethylScrublet/shared-mask adapter; RNA-only removal is
+not implementation of that paired policy.
+
+
 Version 0.16.10 preserves approved dotplot style across both appearance repairs
 and new scientific revisions. It requires a project style record, reuse of the
 same standalone/integrated renderer and reference-based visual comparison.

@@ -1,5 +1,9 @@
 # Single-cell Multiomics Analysis
 
+0.16.11：Scanpy 双细胞检测与去除默认使用官方 scDblFinder，配置和 Notebook 已同步。
+Scrublet 与双方法比较仅在显式选择时使用；缺依赖不自动回退。详见
+[默认方法、捕获文库映射与 R 环境](references/configuration.md#scanpy-doublet-defaults)。
+
 0.16.10：重聚类或更新注释也必须继承已确认的点图样式；独立点图与集合图复用同一套设置，并对照已批准的图做视觉检查。详见[点图样式约定](references/rna-overview.md#preserve-approved-dotplot-style)。保留 0.16.9 的分层顺序、分类说明和紧凑 A–O 排版要求。
 
 0.16.7：完整 Scanpy 总图必须包含 doublet 四图（默认 UMAP 第三排）、注释/QC、组成及每类三基因点图。新计划在 summary 后自动检查交付；缺图、细胞不一致或视觉检查过期时阻止整批完成，数值分析不重复运行。此次修改运行器，历史计划不重写；详见[完整 RNA 图件协议](references/rna-overview.md)。
@@ -18,10 +22,11 @@ A portable Codex skill for configuration-driven single-cell RNA and DNA-methylat
 
 ## 中文使用说明
 
-0.15.1：新增[配对doublet执行规则](references/paired-doublets.md)：独立捕获文库内
-RNA Scrublet与scDblFinder同输入对照后择一 → DNAm MethylScrublet → 不一致/缺失证据复核 → 按cell ID统一过滤。
-RNA对照用于方法选择，不合并两工具删除名单，不自动修改历史数据。此版本更新skill协议；旧Notebook的
-Scrublet尚未被替换为该双模态执行器，正式采用前必须完成显式部署和smoke测试。
+配对 doublet 当前规则（0.16.11；最初于 0.15.1 引入）：独立捕获文库内
+RNA 默认 scDblFinder → DNAm MethylScrublet → 不一致/缺失证据复核 → 按 cell ID 统一过滤。
+Scrublet 比较仅在显式请求时用于方法选择，不合并两工具删除名单。
+RNA 模板已默认运行 scDblFinder；配对共享过滤仍需双模态适配器和 smoke 测试。
+详见[配对 doublet 执行规则](references/paired-doublets.md)。
 
 0.15.0：新增本地 Bismark / MethSCAn / vmrseq 加速包的校验、隔离安装和调用适配，详见 [加速后端](references/acceleration.md)。MethSCAn opt5 CPU 复用现有 DAG；Bismark 与 vmrseq 使用独立入口，GPU 需计算节点和相应依赖。不会自动切换已有项目环境。
 

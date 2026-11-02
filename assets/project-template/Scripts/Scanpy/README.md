@@ -7,10 +7,9 @@ This file describes the long-lived objectives, boundaries and verification rules
 
 ## Current full-delivery requirement / 当前完整交付要求
 
-The notebook below describes the legacy numerical backend, including Scrublet;
-it does not override a user-selected scDblFinder adapter. Read the project skill
-`references/scanpy.md` and `references/rna-overview.md` for the complete workflow.
-Every automated full RNA handoff includes one compact A–O PNG: A–D annotation,
+The numerical notebook defaults to official scDblFinder through the packaged
+Python/R bridge. Scrublet requires explicit configuration. The full overview includes
+A–D annotation/sample views,
 E–H confidence/QC, I–L doublet diagnostics in row three, M–N composition, O marker
 dotplot with three supported genes/type. Use `tools/rna_overview_layout.py`;
 single-line grouped legends, PNG only, no duplicate preview/PDF. Save actual
@@ -26,11 +25,11 @@ Bundled numerical entry point / 内置数值分析入口：
 
 - `Notebooks/<notebook>.ipynb`（打包入口 / packaged entry: `Notebooks/scanpy_workflow.ipynb`）
 
-The notebook reads the 10x filtered matrices of the samples declared by the sample manifest and performs QC, Scrublet, normalization, HVG, PCA, Harmony, neighbour graph, UMAP, Leiden, markers, agent-proposed annotation with human review and result export. `CYL` / `ZCP` are example sample labels (示例/example) that illustrate the manifest; they are not defaults.
+The notebook reads the 10x filtered matrices of the samples declared by the sample manifest and performs QC, scDblFinder, normalization, HVG, PCA, Harmony, neighbour graph, UMAP, Leiden, markers, agent-proposed annotation with human review and result export. `CYL` / `ZCP` are example sample labels (示例/example) that illustrate the manifest; they are not defaults.
 
-该 Notebook 负责读取样本清单声明的 RNA 10x filtered matrices（示例样本名 / example sample labels: `CYL`、`ZCP`），完成 QC、Scrublet、归一化、HVG、PCA、Harmony、邻接图、UMAP、Leiden、marker、自动候选注释与人工复核和结果导出。
+该 Notebook 负责读取样本清单声明的 RNA 10x filtered matrices（示例样本名 / example sample labels: `CYL`、`ZCP`），完成 QC、scDblFinder、归一化、HVG、PCA、Harmony、邻接图、UMAP、Leiden、marker、自动候选注释与人工复核和结果导出。
 
-Validated project adapters may implement selected scDblFinder, external cluster-correlation annotation and complete figure delivery through the signed custom DAG. Scheduler wrappers alone do not prove completion. Never transplant another run’s numeric cluster mappings. 经验证的项目适配器可实现已选 scDblFinder、群相关注释及完整交付；使用同一签名 DAG 与证据规则。
+Validated project adapters may implement paired shared-mask filtering, external cluster-correlation annotation and complete figure delivery through the signed custom DAG. Scheduler wrappers alone do not prove completion. Never transplant another run’s numeric cluster mappings. 经验证的项目适配器可实现配对统一过滤、群相关注释及完整交付；使用同一签名 DAG 与证据规则。
 
 Run root / 运行根目录：`Results/runs/scanpy/<run-id>/`。Below, `Results/runs/scanpy/<run-id>/scanpy/` denotes the Scanpy output directory of that run（下文 `Results/runs/scanpy/<run-id>/scanpy/` 表示该运行下的 Scanpy 输出目录）。
 
@@ -70,8 +69,8 @@ The workflow below corresponds to the current implementation of the packaged not
 
 ### 1. Initialization and input reading / 初始化与输入读取
 
-- Import Scanpy, AnnData, Scrublet, Harmony, Pandas, NumPy and plotting libraries; fix the random seed at `RANDOM_SEED = 0`.
-  导入 Scanpy、AnnData、Scrublet、Harmony、Pandas、NumPy 和绘图库，固定随机种子 `RANDOM_SEED = 0`。
+- Import Scanpy, AnnData, Harmony, Pandas, NumPy and plotting libraries; fix the random seed at `RANDOM_SEED = 0`.
+  导入 Scanpy、AnnData、Harmony、Pandas、NumPy 和绘图库，固定随机种子 `RANDOM_SEED = 0`。
 - `RUN_KIND='baseline'` uses the formal output interface and requires `ITERATION_ID=None`; `RUN_KIND='candidate'` requires a unique `ITERATION_ID` and writes to `Results/runs/scanpy/<run-id>/scanpy/iterations/<ITERATION_ID>/`.
   `RUN_KIND='baseline'` 使用正式输出接口且要求 `ITERATION_ID=None`；`RUN_KIND='candidate'` 要求唯一 `ITERATION_ID`，并写入 `Results/runs/scanpy/<run-id>/scanpy/iterations/<ITERATION_ID>/`。
 - An existing candidate directory raises an error immediately, preventing directory reuse or overwriting of the previous round's evidence.（模板说明 / template note: the packaged notebook raises unless `overwrite_data_outputs` is explicitly enabled to resume in the same run directory; a new `ITERATION_ID` always stays isolated.）
@@ -108,22 +107,26 @@ Each cohort applies the current candidate thresholds independently / 每个 coho
 | `MAX_MT_PERCENT` | 5.0 | `pct_counts_mt < 5.0` |
 | `MIN_CELLS_PER_GENE` | 3 | cohort 内 `filter_genes(min_cells=3)` / within the cohort |
 
-The notebook writes the basic-QC verdict to `obs['pass_basic_qc']` and records the per-cohort cell counts before and after filtering. If any cohort has fewer than 100 cells after basic QC, stop, so that doublet inference is not run on an unstable neighbourhood.（模板中该下限为配置项 `scrublet_min_cells`，来源值 100 / template: the floor is the configured `scrublet_min_cells`, source value 100.）
+The notebook writes the basic-QC verdict to `obs['pass_basic_qc']` and records the per-cohort cell counts before and after filtering. If any cohort has fewer than 100 cells after basic QC, stop, so that doublet inference is not run on an unstable neighbourhood.（模板中该下限为配置项 `doublet_min_cells` (legacy Scrublet: `scrublet_min_cells`)，来源值 100 / template: the floor is the configured `doublet_min_cells` (legacy Scrublet: `scrublet_min_cells`), source value 100.）
 
 Notebook 把基础 QC 判定写入 `obs['pass_basic_qc']`，记录各 cohort 过滤前后细胞数。若任一 cohort 在基础 QC 后少于 100 个细胞，则停止，避免不稳定的 doublet 推断。
 
-### 4. Per-cohort Scrublet / 分 cohort Scrublet
+### 4. Per-capture scDblFinder / 按捕获文库运行 scDblFinder
 
-- Scrublet uses only the raw `layers['counts']` of cells that passed basic QC, and runs per cohort before the samples are merged.
-  Scrublet 只使用通过基础 QC 的原始 `layers['counts']`，在合并样本前分别运行。
-- The expected doublet-rate prior is `doublet_rate_per_1000 × current cohort cell count / 1000`; use the run's sidecar for the coefficient. The packaged notebook retains Scrublet's automatic calls. A rate-quantile threshold is a distinct policy, not the same as specifying this prior.
-  预期 doublet 率为 `doublet_rate_per_1000 × 当前 cohort 细胞数 / 1000`，系数以本轮参数 sidecar 为准。模板保留 Scrublet 自动判定；按率取分位阈值是另一种策略，不能与预期率参数混为一谈。
-- Currently `n_prin_comps=30`, `use_approx_neighbors=False` and random seed `0` are used.
-  当前使用 `n_prin_comps=30`、`use_approx_neighbors=False` 和随机种子 `0`。
-- Write the continuous score and the automatic call to `obs['doublet_score']` and `obs['predicted_doublet']`; save the score histogram and check the threshold manually.
-  将连续分数和自动判定分别写入 `obs['doublet_score']`、`obs['predicted_doublet']`，保存分数直方图并人工检查阈值。
-- Exclude cells with `predicted_doublet=True`; only singlets proceed downstream.
-  排除 `predicted_doublet=True` 的细胞，只将 singlets 送入下游。
+- Default `analysis.scanpy.doublets.method: scDblFinder`; Scrublet requires explicit selection.
+  默认使用 scDblFinder；不要求先比较两种方法，不因依赖缺失自动退回 Scrublet。
+- Declare `doublets.library_ids` from capture metadata, one complete independent capture per input.
+  按真实捕获文库处理，合并同一捕获的技术拆分；donor/sample 不自动等于 library。
+- Use original full-gene `layers['counts']` after basic cell QC and before HVG/normalization.
+  scDblFinder 使用基础细胞 QC 后的全基因原始整数 counts。
+- `scdblfinder.dbr` and `dbr_per1k` default to null, preserving official automatic estimation.
+  Record chemistry-specific overrides; keep native calls, never impose a removal quota.
+- Preserve native `scDblFinder.score`/`scDblFinder.class`, and expose common
+  `doublet_score`/`predicted_doublet` fields. Save all pre-filter calls, including excluded cells,
+  to `tables/doublet_calls.tsv`, R provenance to `tables/scdblfinder/`, and score histograms.
+- RNA-only analyses retain singlets downstream. Paired RNA–DNAm workflows must score both
+  modalities before applying their reviewed shared exclusion list through an explicit adapter.
+
 
 ### 5. Merge, normalization and highly variable genes / 合并、归一化与高变基因
 

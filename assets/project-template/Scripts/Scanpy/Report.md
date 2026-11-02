@@ -28,7 +28,7 @@ The following are replay records of the existing notebook, used for difference d
 |---|---:|---|
 | CYL 输入 cells / input cells | `<N>`（示例 / example: 4,264） | 输入一致时比较 / compare when the input is unchanged |
 | ZCP 输入 cells / input cells | `<N>`（示例 / example: 4,685） | 输入一致时比较 / compare when the input is unchanged |
-| QC 与 doublet 后 cells / cells after QC and doublet removal | `<N>`（示例 / example: 8,696） | 差异出现时定位 QC/Scrublet 阶段 / locate the QC/Scrublet stage when a difference appears |
+| QC 与 doublet 后 cells / cells after QC and doublet removal | `<N>`（示例 / example: 8,696） | 差异出现时定位 QC/doublet detection 阶段 / locate the QC/doublet detection stage when a difference appears |
 | Leiden clusters | `<N>`（示例 / example: 18（0–17）） | 仅作结构变化警报；不得据此强套标签 / structural change alarm only; labels must never be forced from this number |
 | 随机种子 / random seed | 0 | 与实际参数 JSON 交叉检查 / cross-check against the actual parameter JSON |
 

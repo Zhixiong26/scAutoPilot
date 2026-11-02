@@ -9,7 +9,7 @@ or repository commit actually executed; a citation is not execution evidence.
 
 | 环节 | 优先考虑的方法 | 本 skill 中的状态与用途 |
 |---|---|---|
-| 配对 RNA/DNAm doublet | RNA Scrublet/scDblFinder同输入比较后择一 + DNAm MethylScrublet | 按捕获文库检测、复核不一致证据、统一过滤；[协议与迁移边界](paired-doublets.md)，不取两RNA工具删除并集 |
+| 配对 RNA/DNAm doublet | RNA 默认 scDblFinder + DNAm MethylScrublet（仅显式请求时比较 Scrublet） | 按捕获文库检测、复核不一致证据、统一过滤；[协议与迁移边界](paired-doublets.md)，不取两RNA工具删除并集 |
 | PCA/邻居/Leiden 候选确认 | chooseR 重采样稳健性 | 外部方法协议；当前 ARI/Jaccard 种子检查不是 chooseR |
 | 分辨率诊断 | clustree | 外部可视化协议；不等于自动选最佳 resolution |
 | Harmony/整合质量 | scIB / scib-metrics | 外部 benchmark 协议；当前近似 sample-mixing 指标不是官方 iLISI |
@@ -48,7 +48,7 @@ TPE 的依据是 [Bergstra et al., NeurIPS 2011](https://proceedings.neurips.cc/
 
 ### 配对双模态检测，不叠加多个 RNA 工具
 
-按独立捕获文库使用相同原始RNA counts对照Scrublet与scDblFinder，择一作为RNA检测器；使用DNAm mc/cov执行
+按独立捕获文库默认使用 scDblFinder 检测原始 RNA counts；仅在显式请求比较时，使用相同输入对照 Scrublet 并择一。使用 DNAm mc/cov 执行
 ALLCools MethylScrublet；两边完成评分前不按RNA doublet结果预先删除DNAm细胞。
 集中复核不一致及缺失证据，最终按cell ID同步过滤，保留九列决策表。
 两个RNA工具用于方法选择，不取并集、交集或多数投票删除；不增加更多工具或开发替代检测方法，不把两工具一致当独立真值。

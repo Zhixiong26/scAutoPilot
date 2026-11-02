@@ -9,6 +9,17 @@ Build auditable analyses from explicit inputs and preserve the evidence needed t
 choose a result. Use the maintained generator and runtime tools; a previous
 study supplies lessons, not default sample identities, parameters or approval.
 
+## Default RNA doublet method
+
+Use official **scDblFinder** by default for Scanpy doublet detection and removal.
+Scrublet is an explicit alternative; run a two-method comparison only when
+requested. Never fall back to Scrublet when R/scDblFinder is unavailable.
+Score original full-gene integer counts per independent capture after basic QC,
+before normalization/HVG selection. Preserve native scores/classes and all
+pre-filter cell IDs; do not force a fixed removal percentage. This concerns
+cell doublets, not duplicate gene names, barcodes, reads or UMI deduplication.
+
+
 ## Start from the requested work
 
 | Request | First action and reference |
@@ -116,14 +127,12 @@ substitute selected-bin CpG coverage for read counts or delete cells from this
 metric alone.
 
 For paired RNA–DNAm doublet handling, read [paired doublets](references/paired-doublets.md)
-before planning QC: per independent capture library, compare official RNA
-Scrublet versus scDblFinder on identical pre-filter inputs, select one with
-recorded evidence, then reconcile it with DNAm MethylScrublet. Review discordant/
-missing evidence and apply one finalized cell-ID exclusion list to both modalities.
-This is method selection, not union/intersection or voting of RNA calls. Library
-identity is not inferred from donor/sample names. Preserve the nine-column
-decision table and raw inputs. The packaged legacy Scrublet executor is not this
-new policy; verify explicit deployment and shared filtering before claiming it runs.
+before planning QC: use scDblFinder by default for RNA and MethylScrublet for
+DNAm, per independent capture library. Compare with Scrublet only when explicitly
+requested. Review discordant/missing evidence and apply one finalized cell-ID
+exclusion list to both modalities. Preserve the nine-column decision table and
+raw inputs. The built-in RNA-only filter does not implement paired reconciliation;
+verify deployment of both detectors and the shared mask before claiming it does.
 
 A Scanpy candidate needs a complete proposed annotation. Match a supplied
 per-cell reference by exact cell ID; otherwise use this run's markers, QC, sample

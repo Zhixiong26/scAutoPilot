@@ -18,7 +18,7 @@ claim a published name for the existing local heuristics.
 | Revise a biological label or level of detail | Re-examine this partition's markers, then export a separate annotation revision | Cluster membership and coordinates unchanged; old/new labels and rationale |
 | UMAP fragmentation | Examine the high-dimensional graph, QC and sample composition before tuning layout | Connectivity, neighbor preservation, lineage markers and fixed-style figures |
 | Change neighbors, PCs, resolution or min_dist | A new candidate run; the typed MVP changes one logical axis | Parent run, hypothesis, frozen parameters, metric deltas and decision |
-| Change QC, Scrublet policy, cell selection, HVG or Harmony | A distinct scientific experiment outside the four-axis MVP | Changed cell/feature population, explicit rule, config snapshot and newly reviewed clusters |
+| Change QC, doublet method/policy, cell selection, HVG or Harmony | A distinct scientific experiment outside the four-axis MVP | Changed cell/feature population, explicit rule, config snapshot and newly reviewed clusters |
 | MethylVI latent mixing | Diagnose depth, coverage, batch and training before changing the model | Ordinary latent/graph metrics and separate supervised sensitivity plots |
 
 Rendering or relabelling never implicitly authorizes filtering cells. A mixed
@@ -114,11 +114,11 @@ approval state for this derived input, then validate the selected DMR routes.
 
 ## QC and reproducibility diagnostics
 
-- Scrublet's expected-rate prior and its thresholding policy are different
-  choices. IPF_final used a rate-quantile threshold in a local experiment; the
-  packaged notebook uses Scrublet's automatic calls. Do not silently copy the
-  project's rate or quantile policy into the template. Record expected rate,
-  actual threshold, predicted/retained counts and score ties for each sample.
+- scDblFinder is the default; Scrublet requires explicit selection. Preserve
+  native expected-rate estimation/classification unless the run explicitly
+  configures a rate. Expected rates are priors, not quantile deletion quotas.
+  Record method/version, capture identities, seeds, thresholds and all calls.
+  Changing detector or retained cells requires a new scientific run and review.
 - If a Harmony warning is questioned, compare objective trajectory, termination
   iteration, numerical displacement and neighbor preservation before increasing
   iterations. Record library versions, seeds, dtype and threads. Matching seeds

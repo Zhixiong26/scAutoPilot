@@ -6,6 +6,11 @@ channels:
 dependencies:
   - python=3.9
   - pip
+  - r-base
+  - r-matrix
+  - bioconductor-singlecellexperiment
+  - bioconductor-biocparallel
+  - bioconductor-scdblfinder
   - pyyaml
   - scanpy=1.9.3
   - anndata=0.9.2

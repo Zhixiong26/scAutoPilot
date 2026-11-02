@@ -67,6 +67,9 @@ DEFAULT_ANALYSIS = {
         },
         "qc": {"min_genes": 200, "max_genes": 6000, "min_counts": 500,
                "max_mt_percent": 5.0, "min_cells_per_gene": 3},
+        "doublets": {"method": "scDblFinder", "min_cells": 100, "library_ids": {}},
+        "scdblfinder": {"rscript": None, "dbr": None, "dbr_per1k": None, "clusters": False},
+        # Legacy settings are used only after explicit doublets.method: scrublet.
         "scrublet": {"min_cells": 100, "doublet_rate_per_1000": 0.004},
         "target_sum": 10000,
         "hvg": {"n_top_genes": 2000, "batch_key": "cohort"},
